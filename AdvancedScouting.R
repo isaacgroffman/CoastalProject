@@ -1183,6 +1183,176 @@ build_hitter_scouting_data <- function(h_name, tm_data) {
   rec_lhp_1p <- get_recommendations_by_hand(splits_list, "Left", "first_pitch")
   rec_lhp_putaway <- get_recommendations_by_hand(splits_list, "Left", "putaway")
   
+  # ---- COUNT-SPECIFIC ANALYSIS ----
+  # Analyze hitter performance by count situation
+  
+  # Define count categories
+  h_data <- h_data %>%
+    mutate(
+      count_cat = case_when(
+        Balls == 0 & Strikes == 0 ~ "First Pitch",
+        Strikes > Balls ~ "Ahead",          # Pitcher ahead (0-1, 0-2, 1-2)
+        Balls > Strikes ~ "Behind",          # Pitcher behind (1-0, 2-0, 2-1, 3-0, 3-1)
+        Strikes == 2 ~ "Two Strike",         # 2-strike counts
+        Balls == 3 ~ "Full/3-ball",          # 3-ball counts
+        TRUE ~ "Even"
+      ),
+      hitter_count = Balls > Strikes,        # Hitter's count (1-0, 2-0, 2-1, 3-0, 3-1)
+      pitcher_count = Strikes > Balls,       # Pitcher's count (0-1, 0-2, 1-2)
+      two_strike = Strikes == 2,
+      early_count = (Balls + Strikes) <= 1   # 0-0, 0-1, 1-0
+    )
+  
+  # Calculate stats by count category
+  calc_count_stats <- function(data) {
+    if (nrow(data) < 5) return(list(
+      n = 0, ba = NA, slg = NA, whiff = NA, chase = NA, swing_pct = NA, rv100 = NA
+    ))
+    
+    n_swings <- sum(data$SwingIndicator, na.rm = TRUE)
+    n_ooz <- sum(data$OutofZone, na.rm = TRUE)
+    n_ab <- sum(data$ABindicator, na.rm = TRUE)
+    n <- nrow(data)
+    
+    # RV/100 estimate
+    rv <- (sum(data$totalbases, na.rm = TRUE) * 0.3 + 
+             sum(data$KorBB == "Walk", na.rm = TRUE) * 0.3 -
+             sum(data$KorBB == "Strikeout", na.rm = TRUE) * 0.25 -
+             sum(data$PitchCall == "InPlay" & data$HitIndicator == 0, na.rm = TRUE) * 0.15) / n * 100
+    
+    list(
+      n = n,
+      ba = if (n_ab >= 3) sum(data$HitIndicator, na.rm = TRUE) / n_ab else NA,
+      slg = if (n_ab >= 3) sum(data$totalbases, na.rm = TRUE) / n_ab else NA,
+      whiff = if (n_swings >= 5) sum(data$WhiffIndicator, na.rm = TRUE) / n_swings * 100 else NA,
+      chase = if (n_ooz >= 5) sum(data$Chaseindicator, na.rm = TRUE) / n_ooz * 100 else NA,
+      swing_pct = if (n >= 5) n_swings / n * 100 else NA,
+      rv100 = round(rv, 2)
+    )
+  }
+  
+  # Calculate stats by count for each pitch family
+  calc_count_pitch_stats <- function(data, pitch_fam) {
+    fam_data <- data %>% filter(PitchFamily == pitch_fam)
+    if (nrow(fam_data) < 5) return(list(n = 0, ba = NA, slg = NA, whiff = NA, rv100 = NA))
+    
+    n_swings <- sum(fam_data$SwingIndicator, na.rm = TRUE)
+    n_ab <- sum(fam_data$ABindicator, na.rm = TRUE)
+    n <- nrow(fam_data)
+    
+    rv <- (sum(fam_data$totalbases, na.rm = TRUE) * 0.3 + 
+             sum(fam_data$KorBB == "Walk", na.rm = TRUE) * 0.3 -
+             sum(fam_data$KorBB == "Strikeout", na.rm = TRUE) * 0.25 -
+             sum(fam_data$PitchCall == "InPlay" & fam_data$HitIndicator == 0, na.rm = TRUE) * 0.15) / n * 100
+    
+    list(
+      n = n,
+      ba = if (n_ab >= 3) sum(fam_data$HitIndicator, na.rm = TRUE) / n_ab else NA,
+      slg = if (n_ab >= 3) sum(fam_data$totalbases, na.rm = TRUE) / n_ab else NA,
+      whiff = if (n_swings >= 5) sum(fam_data$WhiffIndicator, na.rm = TRUE) / n_swings * 100 else NA,
+      rv100 = round(rv, 2)
+    )
+  }
+  
+  # Overall count stats
+  count_stats <- list(
+    first_pitch = calc_count_stats(h_data %>% filter(count_cat == "First Pitch")),
+    ahead = calc_count_stats(h_data %>% filter(pitcher_count == TRUE)),
+    behind = calc_count_stats(h_data %>% filter(hitter_count == TRUE)),
+    two_strike = calc_count_stats(h_data %>% filter(two_strike == TRUE)),
+    early = calc_count_stats(h_data %>% filter(early_count == TRUE)),
+    hitter_counts = calc_count_stats(h_data %>% filter(hitter_count == TRUE)),
+    pitcher_counts = calc_count_stats(h_data %>% filter(pitcher_count == TRUE))
+  )
+  
+  # Pitch family effectiveness by count
+  count_pitch_stats <- list()
+  for (count_type in c("early", "two_strike", "hitter_counts", "pitcher_counts")) {
+    count_data <- switch(count_type,
+      "early" = h_data %>% filter(early_count == TRUE),
+      "two_strike" = h_data %>% filter(two_strike == TRUE),
+      "hitter_counts" = h_data %>% filter(hitter_count == TRUE),
+      "pitcher_counts" = h_data %>% filter(pitcher_count == TRUE)
+    )
+    
+    count_pitch_stats[[count_type]] <- list(
+      FB = calc_count_pitch_stats(count_data, "FB"),
+      BB = calc_count_pitch_stats(count_data, "BB"),
+      OS = calc_count_pitch_stats(count_data, "OS")
+    )
+  }
+  
+  # Generate count-specific insights
+  count_insights <- c()
+  
+  # Compare early vs late count performance
+  early_rv <- count_stats$early$rv100
+  late_rv <- count_stats$two_strike$rv100
+  
+  if (!is.na(early_rv) && !is.na(late_rv) && count_stats$early$n >= 20 && count_stats$two_strike$n >= 20) {
+    if (early_rv > late_rv + 3) {
+      count_insights <- c(count_insights, "Better early in counts - attack early")
+    } else if (late_rv > early_rv + 3) {
+      count_insights <- c(count_insights, "Dangerous with 2 strikes - be careful late")
+    }
+  }
+  
+  # Hitter vs pitcher counts
+  hitter_rv <- count_stats$hitter_counts$rv100
+  pitcher_rv <- count_stats$pitcher_counts$rv100
+  
+  if (!is.na(hitter_rv) && !is.na(pitcher_rv) && count_stats$hitter_counts$n >= 15 && count_stats$pitcher_counts$n >= 15) {
+    if (hitter_rv > pitcher_rv + 5) {
+      count_insights <- c(count_insights, "Thrives in hitter's counts - stay ahead")
+    } else if (pitcher_rv > hitter_rv + 5) {
+      count_insights <- c(count_insights, "Better in pitcher's counts - can fall behind")
+    }
+  }
+  
+  # Two-strike approach analysis
+  ts_whiff <- count_stats$two_strike$whiff
+  ts_chase <- count_stats$two_strike$chase
+  overall_whiff <- if (sum(h_data$SwingIndicator, na.rm = TRUE) > 20) {
+    sum(h_data$WhiffIndicator, na.rm = TRUE) / sum(h_data$SwingIndicator, na.rm = TRUE) * 100
+  } else NA
+  
+  if (!is.na(ts_whiff) && !is.na(overall_whiff) && count_stats$two_strike$n >= 20) {
+    if (ts_whiff > overall_whiff + 8) {
+      count_insights <- c(count_insights, "High 2-strike whiff rate - expand zone")
+    } else if (ts_whiff < overall_whiff - 5) {
+      count_insights <- c(count_insights, "Good 2-strike contact - may need to compete in zone")
+    }
+  }
+  
+  # Pitch-specific count recommendations
+  pitch_count_recs <- list()
+  
+  for (fam in c("FB", "BB", "OS")) {
+    early_fam <- count_pitch_stats$early[[fam]]
+    late_fam <- count_pitch_stats$two_strike[[fam]]
+    
+    if (!is.null(early_fam) && !is.null(late_fam) && 
+        early_fam$n >= 10 && late_fam$n >= 10) {
+      
+      early_effective <- !is.na(early_fam$rv100) && early_fam$rv100 < -1
+      late_effective <- !is.na(late_fam$rv100) && late_fam$rv100 < -1
+      early_bad <- !is.na(early_fam$rv100) && early_fam$rv100 > 2
+      late_bad <- !is.na(late_fam$rv100) && late_fam$rv100 > 2
+      
+      fam_name <- switch(fam, "FB" = "Fastball", "BB" = "Breaking", "OS" = "Offspeed")
+      
+      if (early_effective && late_bad) {
+        pitch_count_recs[[fam]] <- paste0(fam_name, ": use early, avoid late")
+      } else if (late_effective && early_bad) {
+        pitch_count_recs[[fam]] <- paste0(fam_name, ": save for 2 strikes")
+      } else if (early_effective && late_effective) {
+        pitch_count_recs[[fam]] <- paste0(fam_name, ": effective any count")
+      } else if (early_bad && late_bad) {
+        pitch_count_recs[[fam]] <- paste0(fam_name, ": avoid or locate carefully")
+      }
+    }
+  }
+  
   # ---- DETERMINE PUNISHES/STRUGGLES ----
   
   punishes <- c()
@@ -1271,7 +1441,13 @@ build_hitter_scouting_data <- function(h_name, tm_data) {
     rec_rhp_putaway = rec_rhp_putaway,
     rec_lhp_overall = rec_lhp_overall,
     rec_lhp_1p = rec_lhp_1p,
-    rec_lhp_putaway = rec_lhp_putaway
+    rec_lhp_putaway = rec_lhp_putaway,
+    
+    # Count-specific analysis
+    count_stats = count_stats,
+    count_pitch_stats = count_pitch_stats,
+    count_insights = count_insights,
+    pitch_count_recs = pitch_count_recs
   )
 }
 
@@ -3806,6 +3982,25 @@ server <- function(input, output, session) {
                 br(),
                 span(style = "color: #D73027; font-weight: bold;", "Struggle: "), span(struggles_text)
             ),
+            # Count Insights
+            if (length(profile$count_insights) > 0 || length(profile$pitch_count_recs) > 0) {
+              div(style = "font-size: 8px; margin-bottom: 4px; padding: 3px; background: #f0f8ff; border-radius: 3px; border-left: 2px solid #006F71;",
+                  div(style = "font-weight: bold; color: #006F71; margin-bottom: 2px;", "Count Analysis"),
+                  if (length(profile$count_insights) > 0) {
+                    lapply(profile$count_insights, function(insight) {
+                      div(style = "font-size: 7px; color: #333; margin-left: 4px;", paste0("• ", insight))
+                    })
+                  },
+                  if (length(profile$pitch_count_recs) > 0) {
+                    lapply(names(profile$pitch_count_recs), function(fam) {
+                      rec <- profile$pitch_count_recs[[fam]]
+                      color <- switch(fam, "FB" = "#1f77b4", "BB" = "#9370DB", "OS" = "#2E8B57", "#666")
+                      div(style = paste0("font-size: 7px; color: ", color, "; margin-left: 4px; font-weight: bold;"), 
+                          paste0("→ ", rec))
+                    })
+                  }
+              )
+            },
             # Grades - Now with 5 columns: Raw PWR, Game PWR, CON, AvK, DEC
             div(
               style = "display: grid; grid-template-columns: 30px repeat(5, 1fr); gap: 2px; font-size: 7px; margin-bottom: 6px;",
@@ -4785,6 +4980,86 @@ server <- function(input, output, session) {
                      }
                  )
           )
+        ),
+        
+        hr(style = "margin: 20px 0;"),
+        
+        # Count Analysis Section
+        div(
+          h6("Count Situation Analysis", style = "color: #006F71; margin-bottom: 10px;"),
+          
+          # Get hitter profile for count stats
+          {
+            hitter_profile <- get_scouting_profile(h_name)
+            
+            if (!is.null(hitter_profile) && !is.null(hitter_profile$count_stats)) {
+              cs <- hitter_profile$count_stats
+              
+              div(
+                # Count stats row
+                div(style = "display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 15px;",
+                    # Early count
+                    div(style = "background: #e3f2fd; padding: 10px; border-radius: 6px; text-align: center;",
+                        div(style = "font-size: 9px; color: #666; margin-bottom: 3px;", "Early (0-1 K)"),
+                        div(style = "font-size: 16px; font-weight: bold;", 
+                            if (!is.null(cs$early$rv100) && !is.na(cs$early$rv100)) sprintf("%+.1f", cs$early$rv100) else "-"),
+                        div(style = "font-size: 8px; color: #888;", paste0("n=", cs$early$n))
+                    ),
+                    # Ahead (pitcher)
+                    div(style = "background: #e8f5e9; padding: 10px; border-radius: 6px; text-align: center;",
+                        div(style = "font-size: 9px; color: #666; margin-bottom: 3px;", "Pitcher Ahead"),
+                        div(style = "font-size: 16px; font-weight: bold;", 
+                            if (!is.null(cs$ahead$rv100) && !is.na(cs$ahead$rv100)) sprintf("%+.1f", cs$ahead$rv100) else "-"),
+                        div(style = "font-size: 8px; color: #888;", paste0("n=", cs$ahead$n))
+                    ),
+                    # Behind (hitter ahead)
+                    div(style = "background: #fff3e0; padding: 10px; border-radius: 6px; text-align: center;",
+                        div(style = "font-size: 9px; color: #666; margin-bottom: 3px;", "Hitter Ahead"),
+                        div(style = "font-size: 16px; font-weight: bold;", 
+                            if (!is.null(cs$behind$rv100) && !is.na(cs$behind$rv100)) sprintf("%+.1f", cs$behind$rv100) else "-"),
+                        div(style = "font-size: 8px; color: #888;", paste0("n=", cs$behind$n))
+                    ),
+                    # Two strike
+                    div(style = "background: #fce4ec; padding: 10px; border-radius: 6px; text-align: center;",
+                        div(style = "font-size: 9px; color: #666; margin-bottom: 3px;", "2 Strikes"),
+                        div(style = "font-size: 16px; font-weight: bold;", 
+                            if (!is.null(cs$two_strike$rv100) && !is.na(cs$two_strike$rv100)) sprintf("%+.1f", cs$two_strike$rv100) else "-"),
+                        div(style = "font-size: 8px; color: #888;", 
+                            paste0("Whiff: ", if (!is.null(cs$two_strike$whiff) && !is.na(cs$two_strike$whiff)) sprintf("%.0f%%", cs$two_strike$whiff) else "-"))
+                    ),
+                    # Chase with 2K
+                    div(style = "background: #f3e5f5; padding: 10px; border-radius: 6px; text-align: center;",
+                        div(style = "font-size: 9px; color: #666; margin-bottom: 3px;", "2K Chase%"),
+                        div(style = "font-size: 16px; font-weight: bold;", 
+                            if (!is.null(cs$two_strike$chase) && !is.na(cs$two_strike$chase)) sprintf("%.0f%%", cs$two_strike$chase) else "-"),
+                        div(style = "font-size: 8px; color: #888;", "Avg: 36%")
+                    )
+                ),
+                
+                # Count insights
+                if (length(hitter_profile$count_insights) > 0 || length(hitter_profile$pitch_count_recs) > 0) {
+                  div(style = "background: #f0f8ff; padding: 10px; border-radius: 6px; border-left: 3px solid #006F71;",
+                      div(style = "font-weight: bold; font-size: 11px; color: #006F71; margin-bottom: 5px;", "Count Strategy"),
+                      if (length(hitter_profile$count_insights) > 0) {
+                        lapply(hitter_profile$count_insights, function(insight) {
+                          div(style = "font-size: 10px; color: #333; margin-left: 8px; margin-bottom: 2px;", paste0("• ", insight))
+                        })
+                      },
+                      if (length(hitter_profile$pitch_count_recs) > 0) {
+                        div(style = "margin-top: 5px; font-size: 10px; font-weight: bold; color: #444;",
+                            lapply(names(hitter_profile$pitch_count_recs), function(fam) {
+                              rec <- hitter_profile$pitch_count_recs[[fam]]
+                              div(style = "margin-left: 8px;", paste0("→ ", rec))
+                            })
+                        )
+                      }
+                  )
+                }
+              )
+            } else {
+              div(style = "color: #666; text-align: center; padding: 15px;", "Count analysis not available")
+            }
+          }
         ),
         
         hr(style = "margin: 20px 0;"),
