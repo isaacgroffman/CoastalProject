@@ -2047,7 +2047,7 @@ build_expected_movement_grid <- function(tm_data, bin_size = 0.15) {
     filter(n >= 10)
 }
 
-# Create big movement plot with expected movement markers
+# Create big movement plot with expected movement markers - BATTER'S PERSPECTIVE
 create_pitcher_movement_plot <- function(tm_data, pitcher_name, expected_grid = NULL) {
   if (is.null(tm_data)) {
     return(ggplot() + theme_void() + 
@@ -2058,7 +2058,9 @@ create_pitcher_movement_plot <- function(tm_data, pitcher_name, expected_grid = 
     filter(Pitcher == pitcher_name, 
            !is.na(HorzBreak), !is.na(InducedVertBreak),
            !is.na(TaggedPitchType), TaggedPitchType != "Other",
-           !is.na(RelSpeed))
+           !is.na(RelSpeed)) %>%
+    # Flip HB for batter's perspective (negate)
+    mutate(HorzBreak_batter = -HorzBreak)
   
   if (nrow(pitcher_data) < 10) {
     return(ggplot() + theme_void() + 
@@ -2073,7 +2075,7 @@ create_pitcher_movement_plot <- function(tm_data, pitcher_name, expected_grid = 
   pitch_summary <- pitcher_data %>%
     group_by(TaggedPitchType) %>%
     summarise(
-      mean_hb = median(HorzBreak, na.rm = TRUE),
+      mean_hb = -median(HorzBreak, na.rm = TRUE),  # Flip for batter view
       mean_ivb = median(InducedVertBreak, na.rm = TRUE),
       mean_velo = round(mean(RelSpeed, na.rm = TRUE), 1),
       mean_rel_side = mean(RelSide, na.rm = TRUE),
@@ -2103,24 +2105,24 @@ create_pitcher_movement_plot <- function(tm_data, pitcher_name, expected_grid = 
       left_join(expected_grid, by = c("TaggedPitchType", "RH_bin", "RS_bin")) %>%
       filter(!is.na(exp_hb), !is.na(exp_ivb)) %>%
       mutate(
-        diff_hb = round(mean_hb - exp_hb, 1),
+        exp_hb_batter = -exp_hb,  # Flip for batter view
+        diff_hb = round(mean_hb - (-exp_hb), 1),
         diff_ivb = round(mean_ivb - exp_ivb, 1)
       )
   }
   
-  # Create arm angle rays using SAME calculation as arm angle plot
+  # Create arm angle rays - flip for batter's view
   ray_len <- 12
   arm_df <- pitch_summary %>%
     mutate(
-      # Convert arm angle to ray direction
-      theta_rad = (90 - arm_angle) * pi / 180,  # Convert savant angle to radians
-      x_sign = sign(mean_rel_side),
+      theta_rad = (90 - arm_angle) * pi / 180,
+      x_sign = -sign(mean_rel_side),  # Flip for batter view
       x0 = 0, y0 = 0,
       x1 = x_sign * ray_len * sin(theta_rad),
       y1 = ray_len * cos(theta_rad)
     )
   
-  # Build plot
+  # Build plot - BATTER'S PERSPECTIVE
   p <- ggplot() +
     # Grid circles
     annotate("path", x = 6 * cos(seq(0, 2*pi, length.out = 100)),
@@ -2134,9 +2136,9 @@ create_pitcher_movement_plot <- function(tm_data, pitcher_name, expected_grid = 
     # Axes
     geom_vline(xintercept = 0, color = "gray60", linetype = "dashed") +
     geom_hline(yintercept = 0, color = "gray60", linetype = "dashed") +
-    # Individual pitches
+    # Individual pitches (use flipped HB)
     geom_point(data = pitcher_data,
-               aes(x = HorzBreak, y = InducedVertBreak, color = TaggedPitchType),
+               aes(x = HorzBreak_batter, y = InducedVertBreak, color = TaggedPitchType),
                size = 1.5, alpha = 0.25) +
     # Arm angle rays
     geom_segment(data = arm_df,
@@ -2148,7 +2150,7 @@ create_pitcher_movement_plot <- function(tm_data, pitcher_name, expected_grid = 
   if (!is.null(exp_data) && nrow(exp_data) > 0) {
     p <- p + 
       geom_point(data = exp_data,
-                 aes(x = exp_hb, y = exp_ivb, color = TaggedPitchType),
+                 aes(x = exp_hb_batter, y = exp_ivb, color = TaggedPitchType),
                  shape = 5, size = 6, stroke = 1.5, alpha = 0.8)
   }
   
@@ -2163,8 +2165,8 @@ create_pitcher_movement_plot <- function(tm_data, pitcher_name, expected_grid = 
     scale_color_manual(values = pitch_colors, name = "Pitch Type") +
     scale_fill_manual(values = pitch_colors, guide = "none") +
     coord_equal(xlim = c(-27, 27), ylim = c(-27, 27)) +
-    labs(title = paste("Pitch Movement:", pitcher_name),
-         subtitle = "◇ = Expected movement for arm slot | Rays = Arm angle direction",
+    labs(title = paste("Pitch Movement (Batter's View):", pitcher_name),
+         subtitle = "◇ = Expected | Rays = Arm angle | ← Glove side    Arm side →",
          x = "Horizontal Break (in)", y = "Induced Vertical Break (in)") +
     theme_minimal() +
     theme(
@@ -2306,7 +2308,7 @@ create_pitcher_heatmap <- function(tm_data, pitcher_name, pitch_type = NULL, bat
   return(p)
 }
 
-# Create whiff movement chart
+# Create whiff movement chart - BATTER'S PERSPECTIVE
 create_pitcher_whiff_movement <- function(tm_data, pitcher_name) {
   if (is.null(tm_data)) {
     return(ggplot() + theme_void() + annotate("text", x = 0, y = 0, label = "No data available"))
@@ -2315,7 +2317,9 @@ create_pitcher_whiff_movement <- function(tm_data, pitcher_name) {
   whiff_data <- tm_data %>%
     filter(Pitcher == pitcher_name, PitchCall == "StrikeSwinging",
            !is.na(HorzBreak), !is.na(InducedVertBreak),
-           !is.na(TaggedPitchType), TaggedPitchType != "Other")
+           !is.na(TaggedPitchType), TaggedPitchType != "Other") %>%
+    # Flip HB for batter's perspective
+    mutate(HorzBreak_batter = -HorzBreak)
   
   if (nrow(whiff_data) < 5) {
     return(ggplot() + theme_void() + 
@@ -2324,11 +2328,12 @@ create_pitcher_whiff_movement <- function(tm_data, pitcher_name) {
   
   velo_data <- whiff_data %>%
     group_by(TaggedPitchType) %>%
-    summarise(mean_hb = mean(HorzBreak, na.rm = TRUE), mean_ivb = mean(InducedVertBreak, na.rm = TRUE),
+    summarise(mean_hb = -mean(HorzBreak, na.rm = TRUE),  # Flip for batter view
+              mean_ivb = mean(InducedVertBreak, na.rm = TRUE),
               mean_velo = round(mean(RelSpeed, na.rm = TRUE), 1), count = n(), .groups = "drop") %>%
     filter(count >= 3)
   
-  p <- ggplot(whiff_data, aes(x = HorzBreak, y = InducedVertBreak)) +
+  p <- ggplot(whiff_data, aes(x = HorzBreak_batter, y = InducedVertBreak)) +
     geom_vline(xintercept = 0, color = "black", linewidth = 0.8) +
     geom_hline(yintercept = 0, color = "black", linewidth = 0.8) +
     geom_point(aes(fill = TaggedPitchType), shape = 21, size = 4, color = "black", stroke = 0.4, alpha = 0.8) +
@@ -2339,12 +2344,14 @@ create_pitcher_whiff_movement <- function(tm_data, pitcher_name) {
                      size = 3.5, fontface = "bold"))
     }} +
     scale_fill_manual(values = pitch_colors, name = "Pitch Type") +
-    scale_x_continuous("HB (in)", limits = c(-27.5, 27.5), breaks = seq(-20, 20, by = 10)) +
+    scale_x_continuous("HB (in) - Batter View", limits = c(-27.5, 27.5), breaks = seq(-20, 20, by = 10)) +
     scale_y_continuous("IVB (in)", limits = c(-27.5, 27.5), breaks = seq(-20, 20, by = 10)) +
     coord_equal() +
-    labs(title = paste("Whiff Movement:", pitcher_name, "(n=", nrow(whiff_data), ")")) +
+    labs(title = paste("Whiff Movement (Batter's View):", pitcher_name, "(n=", nrow(whiff_data), ")"),
+         subtitle = "← Glove side    Arm side →") +
     theme_minimal() +
     theme(plot.title = element_text(hjust = 0.5, size = 12, face = "bold"),
+          plot.subtitle = element_text(hjust = 0.5, size = 9, color = "gray50"),
           legend.position = "bottom", panel.border = element_rect(color = "black", fill = NA, linewidth = 1))
   
   return(p)
