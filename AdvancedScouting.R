@@ -1876,22 +1876,49 @@ create_hard_hit_by_pitch <- function(tm_data, batter_name, pitcher_hand, pitch_f
 
 # Pitch colors for visualization
 pitch_colors <- c(
-  "Fastball" = "#FA8072", "FourSeamFastBall" = "#FA8072", "Four-Seam" = "#FA8072", "FF" = "#FA8072",
-  "Sinker" = "#F08080", "TwoSeamFastBall" = "#F08080", "SI" = "#F08080",
-  "Cutter" = "#FFA07A", "FC" = "#FFA07A",
-  "Slider" = "#A020F0", "SL" = "#A020F0",
-  "Sweeper" = "#9370DB", "SW" = "#9370DB",
-  "Curveball" = "#6A5ACD", "CU" = "#6A5ACD", "CB" = "#6A5ACD",
+  "Fastball" = "#1f77b4", "FourSeamFastBall" = "#1f77b4", "Four-Seam" = "#1f77b4", "FF" = "#1f77b4",
+  "Sinker" = "#87CEEB", "TwoSeamFastBall" = "#87CEEB", "SI" = "#87CEEB",
+  "Cutter" = "#98FB98", "FC" = "#98FB98",
+  "Slider" = "#9370DB", "SL" = "#9370DB",
+  "Sweeper" = "#DA70D6", "SW" = "#DA70D6",
+  "Curveball" = "#FF69B4", "CU" = "#FF69B4", "CB" = "#FF69B4",
   "Changeup" = "#2E8B57", "ChangeUp" = "#2E8B57", "CH" = "#2E8B57",
   "Splitter" = "#3CB371", "FS" = "#3CB371", "SP" = "#3CB371",
   "Knuckleball" = "#808080", "KC" = "#808080",
   "Other" = "#A9A9A9"
 )
 
+# League average benchmarks for coloring (pitcher perspective - lower is better for BA/SLG)
+league_avg_pitcher <- list(
+  velo_fb = 93.5, velo_brk = 82, velo_os = 84,
+  spin_fb = 2250, spin_brk = 2500, spin_os = 1800,
+  ivb_fb = 14, ivb_brk = -5, ivb_os = 3,
+  hb_fb = -8, hb_brk = 3, hb_os = 14,
+  whiff_pct = 24, chase_pct = 28, zone_pct = 45, strike_pct = 62,
+  z_whiff_pct = 15, k_pct = 22, bb_pct = 8,
+  ba = 0.250, slg = 0.400, hr_pct = 3
+)
+
 # Helper function for safe division
 pdiv <- function(num, den) ifelse(den > 0, num / den, NA_real_)
 
-# Get pitcher arm angle from release point data
+# Color function for metrics (green = good for pitcher, red = bad)
+metric_color <- function(val, avg, higher_is_better = TRUE, range_pct = 0.20) {
+  if (is.na(val) || is.na(avg)) return("#F5F5F5")
+  range <- abs(avg) * range_pct
+  if (range == 0) range <- 5
+  
+  pct_diff <- (val - avg) / range
+  if (!higher_is_better) pct_diff <- -pct_diff
+  
+  if (pct_diff > 1) return("#1A9850")       # Dark green - well above avg
+  if (pct_diff > 0.3) return("#91CF60")     # Light green
+  if (pct_diff >= -0.3) return("#F5F5F5")   # Gray - average
+  if (pct_diff >= -1) return("#FC8D59")     # Light orange
+  return("#D73027")                          # Red - well below avg
+}
+
+# Get pitcher arm angle from release point data  
 calculate_arm_angle <- function(rel_height, rel_side, pitcher_height_inches = 72, shoulder_scale = 0.70) {
   if (is.na(rel_height) || is.na(rel_side)) return(NA_real_)
   rel_height_in <- 12 * as.numeric(rel_height)
@@ -1904,7 +1931,7 @@ calculate_arm_angle <- function(rel_height, rel_side, pitcher_height_inches = 72
   return(arm_angle_savant)
 }
 
-# Create arm angle plot for pitcher
+# Create compact arm angle plot for pitcher
 create_pitcher_arm_angle_plot <- function(tm_data, pitcher_name, shoulder_scale = 0.70) {
   if (is.null(tm_data)) {
     return(ggplot() + theme_void() + 
@@ -1928,7 +1955,6 @@ create_pitcher_arm_angle_plot <- function(tm_data, pitcher_name, shoulder_scale 
     median(pitcher_data$RelSide, na.rm = TRUE) < 0
   }
   
-  # Estimate pitcher height (default 72 inches = 6 feet)
   h_in <- 72
   shoulder_y <- (h_in * shoulder_scale) / 12
   
@@ -1944,7 +1970,6 @@ create_pitcher_arm_angle_plot <- function(tm_data, pitcher_name, shoulder_scale 
     filter(n >= 5) %>%
     mutate(
       arm_angle = mapply(calculate_arm_angle, RelHeight, RelSide, MoreArgs = list(pitcher_height_inches = h_in)),
-      # Plate view coordinates
       x_rel = if (is_lefty) abs(RelSide) else -abs(RelSide),
       y_rel = RelHeight
     )
@@ -1954,69 +1979,81 @@ create_pitcher_arm_angle_plot <- function(tm_data, pitcher_name, shoulder_scale 
              annotate("text", x = 0.5, y = 0.5, label = "No pitch type data"))
   }
   
-  # Overall arm angle
   overall_arm_angle <- mean(avg_release$arm_angle, na.rm = TRUE)
+  overall_rel_height <- mean(avg_release$RelHeight, na.rm = TRUE)
+  overall_rel_side <- mean(abs(avg_release$RelSide), na.rm = TRUE)
   
   # Create segments from shoulder to release point
   seg <- avg_release %>%
-    mutate(
-      xs = 0,  # shoulder x at center
-      ys = shoulder_y,
-      xe = x_rel,
-      ye = y_rel
-    )
+    mutate(xs = 0, ys = shoulder_y, xe = x_rel, ye = y_rel)
   
-  # Get available pitch colors
-  seg <- seg %>%
-    mutate(color = ifelse(TaggedPitchType %in% names(pitch_colors), 
-                          pitch_colors[TaggedPitchType], "#A9A9A9"))
-  
-  # Build plot
+  # Build COMPACT plot with fixed aspect ratio
   p <- ggplot(seg) +
-    # Mound representation
-    geom_rect(aes(xmin = -5, xmax = 5, ymin = 0, ymax = 0.83),
-              fill = "#632b11", color = NA) +
-    geom_rect(aes(xmin = -0.5, xmax = 0.5, ymin = 0.8, ymax = 0.95),
-              fill = "white", color = "black", linewidth = 0.5) +
+    # Mound (compact)
+    geom_rect(aes(xmin = -3, xmax = 3, ymin = 0, ymax = 0.5), fill = "#632b11", color = NA) +
+    geom_rect(aes(xmin = -0.3, xmax = 0.3, ymin = 0.48, ymax = 0.58), fill = "white", color = "black", linewidth = 0.3) +
     # Arm angle rays
     geom_segment(aes(x = xs, y = ys, xend = xe, yend = ye, color = TaggedPitchType),
-                 linewidth = 1.5, alpha = 0.9) +
+                 linewidth = 2, alpha = 0.9) +
     # Release points
     geom_point(aes(x = xe, y = ye, fill = TaggedPitchType),
-               shape = 21, size = 5, stroke = 0.5, color = "black") +
-    # Color scales
-    scale_color_manual(values = pitch_colors, name = "Pitch Type") +
+               shape = 21, size = 4, stroke = 0.5, color = "black") +
+    scale_color_manual(values = pitch_colors, name = NULL) +
     scale_fill_manual(values = pitch_colors, guide = "none") +
-    # Labels
-    annotate("text", x = -4.5, y = 7.5, label = "← 3B", size = 3, hjust = 0) +
-    annotate("text", x = 4.5, y = 7.5, label = "1B →", size = 3, hjust = 1) +
-    annotate("text", x = 0, y = 0.3, label = sprintf("Avg Arm Angle: %.1f°", overall_arm_angle),
-             size = 3.5, fontface = "bold", color = "white") +
-    # Formatting
-    xlim(-5, 5) + ylim(0, 8) +
-    labs(title = paste("Arm Slot (Batter's View):", pitcher_name),
-         x = "Horizontal Release (ft)", y = "Vertical Release (ft)") +
+    # Compact labels
+    annotate("text", x = -2.8, y = 7, label = "3B", size = 2.5, hjust = 0) +
+    annotate("text", x = 2.8, y = 7, label = "1B", size = 2.5, hjust = 1) +
+    annotate("text", x = 0, y = 0.2, 
+             label = sprintf("%.0f° | Ht: %.1f ft | Side: %.1f ft", overall_arm_angle, overall_rel_height, overall_rel_side),
+             size = 2.5, fontface = "bold", color = "white") +
+    coord_fixed(ratio = 1, xlim = c(-3, 3), ylim = c(0, 7.5)) +
+    labs(title = "Arm Slot (Batter's View)") +
     theme_minimal() +
     theme(
-      plot.title = element_text(size = 12, hjust = 0.5, face = "bold"),
+      plot.title = element_text(size = 10, hjust = 0.5, face = "bold"),
       legend.position = "bottom",
-      panel.background = element_rect(fill = "#f0f0f0", color = NA),
-      panel.grid = element_line(color = "white"),
-      axis.text = element_text(size = 9),
-      axis.title = element_text(size = 10)
-    )
+      legend.text = element_text(size = 7),
+      legend.key.size = unit(0.4, "cm"),
+      panel.background = element_rect(fill = "#f5f5f5", color = NA),
+      panel.grid = element_line(color = "white", linewidth = 0.3),
+      axis.text = element_blank(),
+      axis.title = element_blank(),
+      axis.ticks = element_blank(),
+      plot.margin = margin(2, 2, 2, 2)
+    ) +
+    guides(color = guide_legend(nrow = 1))
   
   return(p)
 }
 
-# Create big movement plot for pitcher with arm angle rays
-create_pitcher_movement_plot <- function(tm_data, pitcher_name) {
+# Build expected movement grid by release height (P5-style)
+build_expected_movement_grid <- function(tm_data, bin_size = 0.15) {
+  if (is.null(tm_data)) return(NULL)
+  
+  tm_data %>%
+    filter(!is.na(TaggedPitchType), !is.na(RelHeight), !is.na(RelSide),
+           !is.na(HorzBreak), !is.na(InducedVertBreak)) %>%
+    mutate(
+      RH_bin = round(RelHeight / bin_size) * bin_size,
+      RS_bin = round(abs(RelSide) / bin_size) * bin_size
+    ) %>%
+    group_by(TaggedPitchType, RH_bin, RS_bin) %>%
+    summarise(
+      exp_hb = median(HorzBreak, na.rm = TRUE),
+      exp_ivb = median(InducedVertBreak, na.rm = TRUE),
+      n = n(),
+      .groups = "drop"
+    ) %>%
+    filter(n >= 10)
+}
+
+# Create big movement plot with expected movement markers
+create_pitcher_movement_plot <- function(tm_data, pitcher_name, expected_grid = NULL) {
   if (is.null(tm_data)) {
     return(ggplot() + theme_void() + 
              annotate("text", x = 0, y = 0, label = "No data available"))
   }
   
-  # Filter data
   pitcher_data <- tm_data %>%
     filter(Pitcher == pitcher_name, 
            !is.na(HorzBreak), !is.na(InducedVertBreak),
@@ -2029,8 +2066,10 @@ create_pitcher_movement_plot <- function(tm_data, pitcher_name) {
   }
   
   total <- nrow(pitcher_data)
+  h_in <- 72
+  shoulder_scale <- 0.70
   
-  # Calculate per-pitch-type averages
+  # Calculate per-pitch-type averages with arm angle
   pitch_summary <- pitcher_data %>%
     group_by(TaggedPitchType) %>%
     summarise(
@@ -2043,92 +2082,178 @@ create_pitcher_movement_plot <- function(tm_data, pitcher_name) {
       n = n(),
       .groups = "drop"
     ) %>%
-    filter(usage_pct >= 1, n >= 5)
+    filter(usage_pct >= 1, n >= 5) %>%
+    mutate(
+      # Calculate arm angle using same formula as arm angle viz
+      arm_angle = mapply(calculate_arm_angle, mean_rel_height, mean_rel_side, 
+                         MoreArgs = list(pitcher_height_inches = h_in, shoulder_scale = shoulder_scale)),
+      RH_bin = round(mean_rel_height / 0.15) * 0.15,
+      RS_bin = round(abs(mean_rel_side) / 0.15) * 0.15
+    )
   
   if (nrow(pitch_summary) == 0) {
     return(ggplot() + theme_void() + 
              annotate("text", x = 0, y = 0, label = "No pitch types with sufficient usage"))
   }
   
-  # Create arm angle rays from origin to avg release direction (scaled)
-  ray_len <- 12
-  shoulder_y <- 4.2  # ~5 feet shoulder height
+  # Get expected movement if grid provided
+  exp_data <- NULL
+  if (!is.null(expected_grid) && nrow(expected_grid) > 0) {
+    exp_data <- pitch_summary %>%
+      left_join(expected_grid, by = c("TaggedPitchType", "RH_bin", "RS_bin")) %>%
+      filter(!is.na(exp_hb), !is.na(exp_ivb)) %>%
+      mutate(
+        diff_hb = round(mean_hb - exp_hb, 1),
+        diff_ivb = round(mean_ivb - exp_ivb, 1)
+      )
+  }
   
+  # Create arm angle rays using SAME calculation as arm angle plot
+  ray_len <- 12
   arm_df <- pitch_summary %>%
     mutate(
-      # Calculate direction from release point
-      dx = abs(mean_rel_side),
-      dy = pmax(mean_rel_height - shoulder_y / 12, 0.1),
-      mag = sqrt(dx^2 + dy^2),
-      ux = dx / mag,
-      uy = dy / mag,
+      # Convert arm angle to ray direction
+      theta_rad = (90 - arm_angle) * pi / 180,  # Convert savant angle to radians
       x_sign = sign(mean_rel_side),
       x0 = 0, y0 = 0,
-      x1 = x_sign * ux * ray_len,
-      y1 = uy * ray_len
+      x1 = x_sign * ray_len * sin(theta_rad),
+      y1 = ray_len * cos(theta_rad)
     )
   
   # Build plot
   p <- ggplot() +
     # Grid circles
-    annotate("path", 
-             x = 6 * cos(seq(0, 2*pi, length.out = 100)),
-             y = 6 * sin(seq(0, 2*pi, length.out = 100)),
-             color = "gray80", linetype = "dotted") +
-    annotate("path", 
-             x = 12 * cos(seq(0, 2*pi, length.out = 100)),
-             y = 12 * sin(seq(0, 2*pi, length.out = 100)),
-             color = "gray80", linetype = "dotted") +
-    annotate("path", 
-             x = 18 * cos(seq(0, 2*pi, length.out = 100)),
-             y = 18 * sin(seq(0, 2*pi, length.out = 100)),
-             color = "gray80", linetype = "dotted") +
-    annotate("path", 
-             x = 24 * cos(seq(0, 2*pi, length.out = 100)),
-             y = 24 * sin(seq(0, 2*pi, length.out = 100)),
-             color = "gray80", linetype = "dotted") +
+    annotate("path", x = 6 * cos(seq(0, 2*pi, length.out = 100)),
+             y = 6 * sin(seq(0, 2*pi, length.out = 100)), color = "gray85", linetype = "dotted") +
+    annotate("path", x = 12 * cos(seq(0, 2*pi, length.out = 100)),
+             y = 12 * sin(seq(0, 2*pi, length.out = 100)), color = "gray85", linetype = "dotted") +
+    annotate("path", x = 18 * cos(seq(0, 2*pi, length.out = 100)),
+             y = 18 * sin(seq(0, 2*pi, length.out = 100)), color = "gray85", linetype = "dotted") +
+    annotate("path", x = 24 * cos(seq(0, 2*pi, length.out = 100)),
+             y = 24 * sin(seq(0, 2*pi, length.out = 100)), color = "gray85", linetype = "dotted") +
     # Axes
     geom_vline(xintercept = 0, color = "gray60", linetype = "dashed") +
     geom_hline(yintercept = 0, color = "gray60", linetype = "dashed") +
-    # Individual pitches with transparency
+    # Individual pitches
     geom_point(data = pitcher_data,
                aes(x = HorzBreak, y = InducedVertBreak, color = TaggedPitchType),
-               size = 2, alpha = 0.3) +
+               size = 1.5, alpha = 0.25) +
     # Arm angle rays
     geom_segment(data = arm_df,
                  aes(x = x0, y = y0, xend = x1, yend = y1, color = TaggedPitchType),
-                 linewidth = 2, alpha = 0.8) +
-    geom_point(data = arm_df, aes(x = x1, y = y1, color = TaggedPitchType),
-               size = 4, shape = 16) +
-    # Mean movement points (large)
+                 linewidth = 1.5, alpha = 0.7) +
+    geom_point(data = arm_df, aes(x = x1, y = y1, color = TaggedPitchType), size = 3)
+  
+  # Add expected movement markers (diamonds) if available
+  if (!is.null(exp_data) && nrow(exp_data) > 0) {
+    p <- p + 
+      geom_point(data = exp_data,
+                 aes(x = exp_hb, y = exp_ivb, color = TaggedPitchType),
+                 shape = 5, size = 6, stroke = 1.5, alpha = 0.8)
+  }
+  
+  # Add mean movement points
+  p <- p +
     geom_point(data = pitch_summary,
                aes(x = mean_hb, y = mean_ivb, fill = TaggedPitchType),
-               shape = 21, size = 10, stroke = 1.5, color = "black") +
-    # Velo labels on mean points
+               shape = 21, size = 9, stroke = 1.5, color = "black") +
     geom_text(data = pitch_summary,
               aes(x = mean_hb, y = mean_ivb, label = mean_velo),
-              size = 3, fontface = "bold") +
-    # Colors
+              size = 2.8, fontface = "bold") +
     scale_color_manual(values = pitch_colors, name = "Pitch Type") +
     scale_fill_manual(values = pitch_colors, guide = "none") +
-    # Formatting
     coord_equal(xlim = c(-27, 27), ylim = c(-27, 27)) +
-    labs(title = paste("Pitch Movement Profile:", pitcher_name),
-         x = "Horizontal Break (inches)",
-         y = "Induced Vertical Break (inches)") +
+    labs(title = paste("Pitch Movement:", pitcher_name),
+         subtitle = "◇ = Expected movement for arm slot | Rays = Arm angle direction",
+         x = "Horizontal Break (in)", y = "Induced Vertical Break (in)") +
     theme_minimal() +
     theme(
-      plot.title = element_text(size = 14, hjust = 0.5, face = "bold"),
+      plot.title = element_text(size = 12, hjust = 0.5, face = "bold"),
+      plot.subtitle = element_text(size = 9, hjust = 0.5, color = "gray50"),
       legend.position = "right",
       panel.background = element_rect(fill = "white", color = NA),
-      axis.text = element_text(size = 10),
-      axis.title = element_text(size = 11)
+      axis.text = element_text(size = 9),
+      axis.title = element_text(size = 10)
     )
   
   return(p)
 }
 
-# Create pitcher heatmap for a specific pitch type and batter side
+# Create count usage chart (horizontal bar chart like the image)
+create_count_usage_chart <- function(tm_data, pitcher_name) {
+  if (is.null(tm_data)) {
+    return(ggplot() + theme_void() + annotate("text", x = 0.5, y = 0.5, label = "No data"))
+  }
+  
+  df <- tm_data %>%
+    filter(Pitcher == pitcher_name, !is.na(TaggedPitchType), TaggedPitchType != "Other",
+           !is.na(BatterSide), !is.na(Balls), !is.na(Strikes))
+  
+  if (nrow(df) < 20) {
+    return(ggplot() + theme_void() + annotate("text", x = 0.5, y = 0.5, label = "Insufficient data"))
+  }
+  
+  # Define count situations
+  df <- df %>%
+    mutate(
+      count_sit = case_when(
+        Balls == 0 & Strikes == 0 ~ "First Pitch",
+        Strikes > Balls ~ "Ahead",
+        Balls > Strikes ~ "Behind",
+        Strikes == 2 ~ "2 Strikes",
+        TRUE ~ NA_character_
+      )
+    ) %>%
+    filter(!is.na(count_sit))
+  
+  # Also add "Kills" (2 strike counts)
+  kills_df <- df %>% filter(Strikes == 2) %>% mutate(count_sit = "Kills")
+  df <- bind_rows(df, kills_df)
+  
+  # Calculate usage by count situation, batter side, and pitch type
+  usage_data <- df %>%
+    group_by(count_sit, BatterSide, TaggedPitchType) %>%
+    summarise(n = n(), .groups = "drop") %>%
+    group_by(count_sit, BatterSide) %>%
+    mutate(pct = 100 * n / sum(n)) %>%
+    ungroup() %>%
+    mutate(
+      count_sit = factor(count_sit, levels = c("First Pitch", "Ahead", "Behind", "2 Strikes", "Kills")),
+      BatterSide = factor(BatterSide, levels = c("Left", "Right"), labels = c("LHH", "RHH"))
+    )
+  
+  # Get pitch order by overall usage
+  pitch_order <- usage_data %>%
+    group_by(TaggedPitchType) %>%
+    summarise(total = sum(n), .groups = "drop") %>%
+    arrange(desc(total)) %>%
+    pull(TaggedPitchType)
+  
+  usage_data <- usage_data %>%
+    mutate(TaggedPitchType = factor(TaggedPitchType, levels = rev(pitch_order)))
+  
+  p <- ggplot(usage_data, aes(x = pct, y = TaggedPitchType, fill = TaggedPitchType)) +
+    geom_col(width = 0.7, color = "white", linewidth = 0.3) +
+    geom_text(aes(label = paste0(round(pct), "%")), hjust = -0.1, size = 2.5) +
+    scale_fill_manual(values = pitch_colors, guide = "none") +
+    scale_x_continuous(limits = c(0, 100), expand = c(0, 0)) +
+    facet_grid(. ~ count_sit + BatterSide, scales = "free_x") +
+    labs(title = "Pitch Usage by Count", x = NULL, y = NULL) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(size = 11, hjust = 0.5, face = "bold"),
+      strip.text = element_text(size = 8, face = "bold"),
+      axis.text.y = element_text(size = 8),
+      axis.text.x = element_blank(),
+      panel.grid.major.y = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.spacing = unit(0.3, "lines")
+    )
+  
+  return(p)
+}
+
+# Create pitcher heatmap
 create_pitcher_heatmap <- function(tm_data, pitcher_name, pitch_type = NULL, batter_side = NULL,
                                    filter_type = "all") {
   base_plot <- function(label = "No data") {
@@ -2136,36 +2261,24 @@ create_pitcher_heatmap <- function(tm_data, pitcher_name, pitch_type = NULL, bat
       annotate("text", x = 0, y = 2.5, label = label, size = 3, color = "gray50") +
       annotate("rect", xmin = -0.8303, xmax = 0.8303, ymin = 1.5, ymax = 3.5,
                fill = NA, color = "black", linewidth = 0.8) +
-      annotate("polygon",
-               x = c(-0.708, 0.708, 0.708, 0, -0.708),
-               y = c(0.15, 0.15, 0.3, 0.5, 0.3),
-               fill = NA, color = "black", linewidth = 0.6) +
-      coord_fixed(ratio = 1) +
-      xlim(-2, 2) + ylim(0, 4.5) +
-      theme_void() +
-      theme(plot.margin = margin(2, 2, 2, 2))
+      annotate("polygon", x = c(-0.708, 0.708, 0.708, 0, -0.708),
+               y = c(0.15, 0.15, 0.3, 0.5, 0.3), fill = NA, color = "black", linewidth = 0.6) +
+      coord_fixed(ratio = 1) + xlim(-2, 2) + ylim(0, 4.5) +
+      theme_void() + theme(plot.margin = margin(2, 2, 2, 2))
   }
   
   if (is.null(tm_data)) return(base_plot())
   
-  # Base filter
   plot_data <- tm_data %>%
-    filter(Pitcher == pitcher_name,
-           !is.na(PlateLocSide), !is.na(PlateLocHeight),
-           PlateLocSide >= -2, PlateLocSide <= 2,
-           PlateLocHeight >= 0, PlateLocHeight <= 5)
+    filter(Pitcher == pitcher_name, !is.na(PlateLocSide), !is.na(PlateLocHeight),
+           PlateLocSide >= -2, PlateLocSide <= 2, PlateLocHeight >= 0, PlateLocHeight <= 5)
   
-  # Filter by pitch type if specified
   if (!is.null(pitch_type) && pitch_type != "All") {
     plot_data <- plot_data %>% filter(TaggedPitchType == pitch_type)
   }
-  
-  # Filter by batter side if specified
   if (!is.null(batter_side) && batter_side != "Both") {
     plot_data <- plot_data %>% filter(BatterSide == batter_side)
   }
-  
-  # Apply filter type
   if (filter_type == "Whiffs") {
     plot_data <- plot_data %>% filter(PitchCall == "StrikeSwinging")
   } else if (filter_type == "Hard Contact (95+ EV)") {
@@ -2176,45 +2289,31 @@ create_pitcher_heatmap <- function(tm_data, pitcher_name, pitch_type = NULL, bat
   
   if (nrow(plot_data) < 5) return(base_plot(paste0("n=", nrow(plot_data))))
   
-  title_text <- if (!is.null(pitch_type) && pitch_type != "All") {
-    pitch_type
-  } else {
-    "All Pitches"
-  }
+  title_text <- if (!is.null(pitch_type) && pitch_type != "All") pitch_type else "All"
   
   p <- ggplot(plot_data, aes(x = PlateLocSide, y = PlateLocHeight)) +
     stat_density_2d(aes(fill = after_stat(density)), geom = "raster", contour = FALSE) +
-    scale_fill_gradientn(
-      colours = c("white", "blue", "#FF9999", "red", "darkred"),
-      guide = "none"
-    ) +
+    scale_fill_gradientn(colours = c("white", "blue", "#FF9999", "red", "darkred"), guide = "none") +
     annotate("rect", xmin = -0.8303, xmax = 0.8303, ymin = 1.5, ymax = 3.5,
              fill = NA, color = "black", linewidth = 0.8) +
-    annotate("polygon",
-             x = c(-0.708, 0.708, 0.708, 0, -0.708),
-             y = c(0.15, 0.15, 0.3, 0.5, 0.3),
-             fill = NA, color = "black", linewidth = 0.6) +
+    annotate("polygon", x = c(-0.708, 0.708, 0.708, 0, -0.708),
+             y = c(0.15, 0.15, 0.3, 0.5, 0.3), fill = NA, color = "black", linewidth = 0.6) +
     annotate("text", x = 0, y = 4.2, label = paste0(title_text, " (n=", nrow(plot_data), ")"),
              size = 2.5, fontface = "bold") +
-    coord_fixed(ratio = 1) +
-    xlim(-2, 2) + ylim(0, 4.5) +
-    theme_void() +
-    theme(plot.margin = margin(2, 2, 2, 2))
+    coord_fixed(ratio = 1) + xlim(-2, 2) + ylim(0, 4.5) +
+    theme_void() + theme(plot.margin = margin(2, 2, 2, 2))
   
   return(p)
 }
 
-# Create whiff movement chart for pitcher
+# Create whiff movement chart
 create_pitcher_whiff_movement <- function(tm_data, pitcher_name) {
   if (is.null(tm_data)) {
-    return(ggplot() + theme_void() + 
-             annotate("text", x = 0, y = 0, label = "No data available"))
+    return(ggplot() + theme_void() + annotate("text", x = 0, y = 0, label = "No data available"))
   }
   
-  # Filter for whiffs
   whiff_data <- tm_data %>%
-    filter(Pitcher == pitcher_name,
-           PitchCall == "StrikeSwinging",
+    filter(Pitcher == pitcher_name, PitchCall == "StrikeSwinging",
            !is.na(HorzBreak), !is.na(InducedVertBreak),
            !is.na(TaggedPitchType), TaggedPitchType != "Other")
   
@@ -2223,191 +2322,171 @@ create_pitcher_whiff_movement <- function(tm_data, pitcher_name) {
              annotate("text", x = 0, y = 0, label = paste0("Insufficient whiff data (n=", nrow(whiff_data), ")")))
   }
   
-  # Calculate averages per pitch type
   velo_data <- whiff_data %>%
     group_by(TaggedPitchType) %>%
-    summarise(
-      mean_hb = mean(HorzBreak, na.rm = TRUE),
-      mean_ivb = mean(InducedVertBreak, na.rm = TRUE),
-      mean_velo = round(mean(RelSpeed, na.rm = TRUE), 1),
-      count = n(),
-      .groups = "drop"
-    ) %>%
+    summarise(mean_hb = mean(HorzBreak, na.rm = TRUE), mean_ivb = mean(InducedVertBreak, na.rm = TRUE),
+              mean_velo = round(mean(RelSpeed, na.rm = TRUE), 1), count = n(), .groups = "drop") %>%
     filter(count >= 3)
   
   p <- ggplot(whiff_data, aes(x = HorzBreak, y = InducedVertBreak)) +
     geom_vline(xintercept = 0, color = "black", linewidth = 0.8) +
     geom_hline(yintercept = 0, color = "black", linewidth = 0.8) +
-    geom_point(aes(fill = TaggedPitchType), shape = 21, size = 4, 
-               color = "black", stroke = 0.4, alpha = 0.8) +
+    geom_point(aes(fill = TaggedPitchType), shape = 21, size = 4, color = "black", stroke = 0.4, alpha = 0.8) +
     {if (nrow(velo_data) > 0) {
-      list(
-        geom_point(data = velo_data,
-                   aes(x = mean_hb, y = mean_ivb, fill = TaggedPitchType),
-                   shape = 21, size = 10, color = "black", stroke = 1.5),
-        geom_text(data = velo_data,
-                  aes(x = mean_hb, y = mean_ivb, label = mean_velo),
-                  size = 3.5, fontface = "bold")
-      )
+      list(geom_point(data = velo_data, aes(x = mean_hb, y = mean_ivb, fill = TaggedPitchType),
+                      shape = 21, size = 10, color = "black", stroke = 1.5),
+           geom_text(data = velo_data, aes(x = mean_hb, y = mean_ivb, label = mean_velo),
+                     size = 3.5, fontface = "bold"))
     }} +
     scale_fill_manual(values = pitch_colors, name = "Pitch Type") +
     scale_x_continuous("HB (in)", limits = c(-27.5, 27.5), breaks = seq(-20, 20, by = 10)) +
     scale_y_continuous("IVB (in)", limits = c(-27.5, 27.5), breaks = seq(-20, 20, by = 10)) +
     coord_equal() +
-    labs(title = paste("Whiff Movement Chart:", pitcher_name, "(n=", nrow(whiff_data), ")")) +
+    labs(title = paste("Whiff Movement:", pitcher_name, "(n=", nrow(whiff_data), ")")) +
     theme_minimal() +
-    theme(
-      plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
-      legend.position = "bottom",
-      panel.border = element_rect(color = "black", fill = NA, linewidth = 1),
-      axis.text = element_text(size = 10),
-      axis.title = element_text(size = 11)
-    )
+    theme(plot.title = element_text(hjust = 0.5, size = 12, face = "bold"),
+          legend.position = "bottom", panel.border = element_rect(color = "black", fill = NA, linewidth = 1))
   
   return(p)
 }
 
-# Calculate pitcher stats for overview
+# Calculate pitcher stats with percentile velo ranges
 calculate_pitcher_stats <- function(tm_data, pitcher_name, date_range = NULL, batter_side = NULL) {
   if (is.null(tm_data)) return(NULL)
   
-  # Base filter
-  df <- tm_data %>%
-    filter(Pitcher == pitcher_name, !is.na(TaggedPitchType))
+  df <- tm_data %>% filter(Pitcher == pitcher_name, !is.na(TaggedPitchType))
   
-  # Date range filter
   if (!is.null(date_range) && length(date_range) == 2) {
     df <- df %>% filter(Date >= date_range[1], Date <= date_range[2])
   }
-  
-  # Batter side filter
   if (!is.null(batter_side) && length(batter_side) > 0) {
     df <- df %>% filter(BatterSide %in% batter_side)
   }
   
   if (nrow(df) < 10) return(NULL)
   
-  # Add indicators if not present
   df <- df %>% add_indicators()
   
-  # Get throwing hand
-  throws <- if ("PitcherThrows" %in% names(df)) {
-    na.omit(df$PitcherThrows)[1]
-  } else "Unknown"
+  throws <- if ("PitcherThrows" %in% names(df)) na.omit(df$PitcherThrows)[1] else "Unknown"
   
-  # Calculate stats
   stats <- df %>%
     summarise(
-      n_pitches = n(),
-      throws = throws,
-      # Velo stats
+      n_pitches = n(), throws = throws,
       avg_velo = mean(RelSpeed, na.rm = TRUE),
       max_velo = max(RelSpeed, na.rm = TRUE),
       min_velo = min(RelSpeed, na.rm = TRUE),
-      # Rate stats
       strike_pct = 100 * sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", 
                                                "FoulBallNotFieldable", "InPlay"), na.rm = TRUE) / n(),
       zone_pct = 100 * pdiv(sum(StrikeZoneIndicator, na.rm = TRUE), n()),
       whiff_pct = 100 * pdiv(sum(WhiffIndicator, na.rm = TRUE), sum(SwingIndicator, na.rm = TRUE)),
       z_whiff_pct = 100 * pdiv(sum(Zwhiffind, na.rm = TRUE), sum(Zswing, na.rm = TRUE)),
       chase_pct = 100 * pdiv(sum(Chaseindicator, na.rm = TRUE), sum(OutofZone, na.rm = TRUE)),
-      # PA-level stats
       n_pa = sum(PAindicator, na.rm = TRUE),
       n_ab = sum(ABindicator, na.rm = TRUE),
       k_pct = 100 * pdiv(sum(KorBB == "Strikeout", na.rm = TRUE), sum(PAindicator, na.rm = TRUE)),
       bb_hbp_pct = 100 * pdiv(sum(KorBB == "Walk", na.rm = TRUE) + sum(PitchCall == "HitByPitch", na.rm = TRUE),
                               sum(PAindicator, na.rm = TRUE)),
-      # Batting against stats
       ba = pdiv(sum(HitIndicator, na.rm = TRUE), sum(ABindicator, na.rm = TRUE)),
       hr_pct = 100 * pdiv(sum(PlayResult == "HomeRun", na.rm = TRUE), sum(PAindicator, na.rm = TRUE)),
       .groups = "drop"
     )
   
-  # Stats by pitch type
+  # Velo ranges using 20th and 90th percentile
   pitch_stats <- df %>%
     group_by(TaggedPitchType) %>%
     summarise(
-      n = n(),
-      usage = n(),
-      velo_min = min(RelSpeed, na.rm = TRUE),
-      velo_max = max(RelSpeed, na.rm = TRUE),
+      n = n(), usage = n(),
+      velo_p20 = quantile(RelSpeed, 0.20, na.rm = TRUE),
+      velo_p90 = quantile(RelSpeed, 0.90, na.rm = TRUE),
       velo_avg = mean(RelSpeed, na.rm = TRUE),
       .groups = "drop"
     ) %>%
     mutate(usage_pct = 100 * usage / sum(usage)) %>%
     arrange(desc(usage_pct))
   
-  # Stats vs LHH and RHH
-  stats_lhh <- df %>%
-    filter(BatterSide == "Left") %>%
-    summarise(
-      n = n(),
-      ba = pdiv(sum(HitIndicator, na.rm = TRUE), sum(ABindicator, na.rm = TRUE)),
-      .groups = "drop"
-    )
+  stats_lhh <- df %>% filter(BatterSide == "Left") %>%
+    summarise(n = n(), ba = pdiv(sum(HitIndicator, na.rm = TRUE), sum(ABindicator, na.rm = TRUE)), .groups = "drop")
   
-  stats_rhh <- df %>%
-    filter(BatterSide == "Right") %>%
-    summarise(
-      n = n(),
-      ba = pdiv(sum(HitIndicator, na.rm = TRUE), sum(ABindicator, na.rm = TRUE)),
-      .groups = "drop"
-    )
+  stats_rhh <- df %>% filter(BatterSide == "Right") %>%
+    summarise(n = n(), ba = pdiv(sum(HitIndicator, na.rm = TRUE), sum(ABindicator, na.rm = TRUE)), .groups = "drop")
   
-  return(list(
-    overall = stats,
-    by_pitch = pitch_stats,
-    vs_lhh = stats_lhh,
-    vs_rhh = stats_rhh
-  ))
+  return(list(overall = stats, by_pitch = pitch_stats, vs_lhh = stats_lhh, vs_rhh = stats_rhh))
 }
 
-# Create pitch metrics table for pitcher
-create_pitcher_metrics_table <- function(tm_data, pitcher_name, date_range = NULL, batter_side = NULL) {
+# Create pitch shape metrics table (velo, spin, movement)
+create_pitch_shape_table <- function(tm_data, pitcher_name, date_range = NULL, batter_side = NULL) {
   if (is.null(tm_data)) return(NULL)
   
-  # Base filter
-  df <- tm_data %>%
-    filter(Pitcher == pitcher_name, !is.na(TaggedPitchType), TaggedPitchType != "Other")
+  df <- tm_data %>% filter(Pitcher == pitcher_name, !is.na(TaggedPitchType), TaggedPitchType != "Other")
   
-  # Date range filter
   if (!is.null(date_range) && length(date_range) == 2) {
     df <- df %>% filter(Date >= date_range[1], Date <= date_range[2])
   }
-  
-  # Batter side filter  
   if (!is.null(batter_side) && length(batter_side) > 0) {
     df <- df %>% filter(BatterSide %in% batter_side)
   }
   
   if (nrow(df) < 10) return(NULL)
   
-  # Add indicators
-  df <- df %>% add_indicators()
-  
   total <- nrow(df)
   
-  # Calculate metrics by pitch type
   res <- df %>%
     group_by(Pitch = TaggedPitchType) %>%
     summarise(
       `#` = n(),
-      `Usage %` = 100 * n() / total,
+      `Usage` = round(100 * n() / total, 1),
       `Velo` = round(mean(RelSpeed, na.rm = TRUE), 1),
+      `Velo Range` = paste0(round(quantile(RelSpeed, 0.20, na.rm = TRUE), 0), "-", 
+                            round(quantile(RelSpeed, 0.90, na.rm = TRUE), 0)),
       `Spin` = round(mean(SpinRate, na.rm = TRUE), 0),
-      `HB` = round(mean(HorzBreak, na.rm = TRUE), 1),
       `IVB` = round(mean(InducedVertBreak, na.rm = TRUE), 1),
-      `Strike %` = 100 * pdiv(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", 
-                                                    "FoulBallNotFieldable", "InPlay"), na.rm = TRUE), n()),
-      `Whiff %` = 100 * pdiv(sum(WhiffIndicator, na.rm = TRUE), sum(SwingIndicator, na.rm = TRUE)),
-      `Z-Whiff %` = 100 * pdiv(sum(Zwhiffind, na.rm = TRUE), sum(Zswing, na.rm = TRUE)),
-      `Chase %` = 100 * pdiv(sum(Chaseindicator, na.rm = TRUE), sum(OutofZone, na.rm = TRUE)),
-      `Zone %` = 100 * pdiv(sum(StrikeZoneIndicator, na.rm = TRUE), n()),
-      `AVG` = pdiv(sum(HitIndicator, na.rm = TRUE), sum(ABindicator, na.rm = TRUE)),
-      `SLG` = pdiv(sum(totalbases, na.rm = TRUE), sum(ABindicator, na.rm = TRUE)),
+      `HB` = round(mean(HorzBreak, na.rm = TRUE), 1),
+      `Rel Ht` = round(mean(RelHeight, na.rm = TRUE), 2),
+      `Rel Side` = round(mean(abs(RelSide), na.rm = TRUE), 2),
+      `Ext` = round(mean(Extension, na.rm = TRUE), 1),
       .groups = "drop"
     ) %>%
-    arrange(desc(`Usage %`))
+    arrange(desc(`Usage`))
+  
+  return(res)
+}
+
+# Create pitch results table (outcomes)
+create_pitch_results_table <- function(tm_data, pitcher_name, date_range = NULL, batter_side = NULL) {
+  if (is.null(tm_data)) return(NULL)
+  
+  df <- tm_data %>% filter(Pitcher == pitcher_name, !is.na(TaggedPitchType), TaggedPitchType != "Other")
+  
+  if (!is.null(date_range) && length(date_range) == 2) {
+    df <- df %>% filter(Date >= date_range[1], Date <= date_range[2])
+  }
+  if (!is.null(batter_side) && length(batter_side) > 0) {
+    df <- df %>% filter(BatterSide %in% batter_side)
+  }
+  
+  if (nrow(df) < 10) return(NULL)
+  
+  df <- df %>% add_indicators()
+  total <- nrow(df)
+  
+  res <- df %>%
+    group_by(Pitch = TaggedPitchType) %>%
+    summarise(
+      `#` = n(),
+      `Usage` = round(100 * n() / total, 1),
+      `Strike%` = round(100 * pdiv(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging", "FoulBall", 
+                                                         "FoulBallNotFieldable", "InPlay"), na.rm = TRUE), n()), 1),
+      `Whiff%` = round(100 * pdiv(sum(WhiffIndicator, na.rm = TRUE), sum(SwingIndicator, na.rm = TRUE)), 1),
+      `CSW%` = round(100 * pdiv(sum(PitchCall %in% c("StrikeCalled", "StrikeSwinging"), na.rm = TRUE), n()), 1),
+      `Chase%` = round(100 * pdiv(sum(Chaseindicator, na.rm = TRUE), sum(OutofZone, na.rm = TRUE)), 1),
+      `Zone%` = round(100 * pdiv(sum(StrikeZoneIndicator, na.rm = TRUE), n()), 1),
+      `AVG` = round(pdiv(sum(HitIndicator, na.rm = TRUE), sum(ABindicator, na.rm = TRUE)), 3),
+      `SLG` = round(pdiv(sum(totalbases, na.rm = TRUE), sum(ABindicator, na.rm = TRUE)), 3),
+      `HH%` = round(100 * pdiv(sum(PitchCall == "InPlay" & ExitSpeed >= 95, na.rm = TRUE), 
+                               sum(PitchCall == "InPlay", na.rm = TRUE)), 1),
+      .groups = "drop"
+    ) %>%
+    arrange(desc(`Usage`))
   
   return(res)
 }
@@ -3341,30 +3420,48 @@ ui <- fluidPage(
               
               # Top Row: Stats + Arm Angle
               fluidRow(
-                column(6,
+                column(7,
                        div(style = "background: white; padding: 15px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 15px;",
                            h5("Pitcher Overview", style = "color: #006F71; margin-bottom: 10px;"),
                            uiOutput("pitcher_charts_stats")
                        )
                 ),
-                column(6,
+                column(5,
                        div(style = "background: white; padding: 15px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 15px;",
-                           h5("Arm Slot", style = "color: #006F71; margin-bottom: 10px;"),
-                           plotOutput("pitcher_charts_arm_angle", height = "250px")
+                           h5("Arm Slot", style = "color: #006F71; margin-bottom: 5px;"),
+                           plotOutput("pitcher_charts_arm_angle", height = "220px")
                        )
                 )
               ),
               
-              # Pitch Metrics Table
+              # Pitch Tables Row - Shape and Results
+              fluidRow(
+                column(6,
+                       div(style = "background: white; padding: 15px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 15px;",
+                           h5("Pitch Shape Metrics", style = "color: #006F71; margin-bottom: 10px;"),
+                           gt::gt_output("pitcher_charts_shape_table")
+                       )
+                ),
+                column(6,
+                       div(style = "background: white; padding: 15px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 15px;",
+                           h5("Pitch Results", style = "color: #006F71; margin-bottom: 10px;"),
+                           gt::gt_output("pitcher_charts_results_table")
+                       )
+                )
+              ),
+              
+              # Count Usage Chart
               div(style = "background: white; padding: 15px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 15px;",
-                  h5("Pitch Arsenal Metrics", style = "color: #006F71; margin-bottom: 10px;"),
-                  gt::gt_output("pitcher_charts_metrics_table")
+                  h5("Pitch Usage by Count Situation", style = "color: #006F71; margin-bottom: 10px;"),
+                  plotOutput("pitcher_charts_count_usage", height = "280px")
               ),
               
               # Movement Plot
               div(style = "background: white; padding: 15px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 15px;",
                   h5("Pitch Movement Profile", style = "color: #006F71; margin-bottom: 10px;"),
-                  plotOutput("pitcher_charts_movement", height = "450px")
+                  p(style = "font-size: 11px; color: #666; margin-bottom: 10px;", 
+                    "Large circles = pitcher avg | ◇ diamonds = expected movement for arm slot | Rays = arm angle direction"),
+                  plotOutput("pitcher_charts_movement", height = "420px")
               ),
               
               # Heatmaps Section
@@ -3379,7 +3476,6 @@ ui <- fluidPage(
                     )
                   ),
                   
-                  # vs LHH Heatmaps
                   h6("vs Left-Handed Hitters", style = "color: #666; margin: 10px 0;"),
                   fluidRow(
                     column(12,
@@ -3389,7 +3485,6 @@ ui <- fluidPage(
                     )
                   ),
                   
-                  # vs RHH Heatmaps
                   h6("vs Right-Handed Hitters", style = "color: #666; margin: 15px 0 10px 0;"),
                   fluidRow(
                     column(12,
@@ -3403,7 +3498,7 @@ ui <- fluidPage(
               # Whiff Movement Chart
               div(style = "background: white; padding: 15px; border-radius: 8px; border: 1px solid #ddd;",
                   h5("Whiff Movement Chart", style = "color: #006F71; margin-bottom: 10px;"),
-                  plotOutput("pitcher_charts_whiff_movement", height = "400px")
+                  plotOutput("pitcher_charts_whiff_movement", height = "350px")
               )
           )
         ),
@@ -3432,12 +3527,12 @@ ui <- fluidPage(
                   )
               ),
               
-              # Report Preview
-              div(style = "background: white; padding: 20px; border-radius: 8px; border: 1px solid #ddd;",
-                  h5("Report Preview", style = "color: #006F71; margin-bottom: 15px;"),
+              # Report Preview - Portrait Layout
+              div(style = "background: white; padding: 20px; border-radius: 8px; border: 1px solid #ddd; max-width: 850px; margin: 0 auto;",
+                  h5("Report Preview (Portrait)", style = "color: #006F71; margin-bottom: 15px; text-align: center;"),
                   
                   # Header Section
-                  div(style = "border: 2px solid #006F71; border-radius: 8px; padding: 15px; margin-bottom: 15px;",
+                  div(style = "border: 2px solid #006F71; border-radius: 8px; padding: 15px; margin-bottom: 15px; background: linear-gradient(to right, #006F71, #00897b);",
                       uiOutput("pitcher_report_header")
                   ),
                   
@@ -3446,42 +3541,67 @@ ui <- fluidPage(
                       uiOutput("pitcher_report_stats_row")
                   ),
                   
-                  # Charts Grid
+                  # Tables Row
                   fluidRow(
                     column(6,
+                           div(style = "border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-bottom: 15px;",
+                               h6("Pitch Shape", style = "text-align: center; color: #006F71; margin-bottom: 8px;"),
+                               gt::gt_output("pitcher_report_shape_table")
+                           )
+                    ),
+                    column(6,
+                           div(style = "border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-bottom: 15px;",
+                               h6("Pitch Results", style = "text-align: center; color: #006F71; margin-bottom: 8px;"),
+                               gt::gt_output("pitcher_report_results_table")
+                           )
+                    )
+                  ),
+                  
+                  # Count Usage Chart
+                  div(style = "border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-bottom: 15px;",
+                      h6("Pitch Usage by Count", style = "text-align: center; color: #006F71;"),
+                      plotOutput("pitcher_report_count_usage", height = "220px")
+                  ),
+                  
+                  # Charts Row
+                  fluidRow(
+                    column(5,
                            div(style = "border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-bottom: 15px;",
                                h6("Arm Slot", style = "text-align: center; color: #006F71;"),
-                               plotOutput("pitcher_report_arm_slot", height = "200px")
+                               plotOutput("pitcher_report_arm_slot", height = "180px")
                            )
                     ),
-                    column(6,
+                    column(7,
                            div(style = "border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-bottom: 15px;",
                                h6("Pitch Movement", style = "text-align: center; color: #006F71;"),
-                               plotOutput("pitcher_report_movement", height = "200px")
+                               plotOutput("pitcher_report_movement", height = "180px")
                            )
                     )
                   ),
                   
-                  # Pitch Metrics
-                  div(style = "border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-bottom: 15px;",
-                      h6("Arsenal Summary", style = "text-align: center; color: #006F71;"),
-                      gt::gt_output("pitcher_report_arsenal_table")
-                  ),
-                  
-                  # Heatmaps Row
+                  # Heatmaps Row - 4 columns (2 per side)
+                  h6("Location Heatmaps", style = "text-align: center; color: #006F71; margin-bottom: 10px;"),
                   fluidRow(
                     column(6,
-                           div(style = "border: 1px solid #ddd; border-radius: 8px; padding: 10px;",
-                               h6("vs LHH Locations", style = "text-align: center; color: #006F71;"),
-                               plotOutput("pitcher_report_heatmap_lhh", height = "200px")
+                           div(style = "text-align: center; font-weight: bold; margin-bottom: 5px; color: #666;", "vs LHH"),
+                           div(style = "display: flex; justify-content: center; gap: 10px;",
+                               div(plotOutput("pitcher_report_hm_lhh_all", height = "120px", width = "100px")),
+                               div(plotOutput("pitcher_report_hm_lhh_whiff", height = "120px", width = "100px"))
                            )
                     ),
                     column(6,
-                           div(style = "border: 1px solid #ddd; border-radius: 8px; padding: 10px;",
-                               h6("vs RHH Locations", style = "text-align: center; color: #006F71;"),
-                               plotOutput("pitcher_report_heatmap_rhh", height = "200px")
+                           div(style = "text-align: center; font-weight: bold; margin-bottom: 5px; color: #666;", "vs RHH"),
+                           div(style = "display: flex; justify-content: center; gap: 10px;",
+                               div(plotOutput("pitcher_report_hm_rhh_all", height = "120px", width = "100px")),
+                               div(plotOutput("pitcher_report_hm_rhh_whiff", height = "120px", width = "100px"))
                            )
                     )
+                  ),
+                  
+                  # Whiff Movement
+                  div(style = "border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-top: 15px;",
+                      h6("Whiff Locations by Movement", style = "text-align: center; color: #006F71;"),
+                      plotOutput("pitcher_report_whiff_movement", height = "200px")
                   )
               )
           )
@@ -4858,10 +4978,10 @@ server <- function(input, output, session) {
     os <- stats$overall
     by_pitch <- stats$by_pitch
     
-    # Get pitch type velo ranges
+    # Get pitch type velo ranges using percentiles (p20-p90)
     velo_ranges <- by_pitch %>%
-      filter(!is.na(velo_min), !is.na(velo_max)) %>%
-      mutate(velo_range = paste0(TaggedPitchType, ": ", round(velo_min, 0), "-", round(velo_max, 0))) %>%
+      filter(!is.na(velo_p20), !is.na(velo_p90)) %>%
+      mutate(velo_range = paste0(TaggedPitchType, ": ", round(velo_p20, 0), "-", round(velo_p90, 0))) %>%
       pull(velo_range) %>%
       paste(collapse = ", ")
     
@@ -4936,41 +5056,84 @@ server <- function(input, output, session) {
     create_pitcher_arm_angle_plot(pitcher_charts_data(), input$pitcher_charts_pitcher)
   }, bg = "transparent")
   
-  # Pitch metrics table
-  output$pitcher_charts_metrics_table <- gt::render_gt({
+  # Pitch shape metrics table
+  output$pitcher_charts_shape_table <- gt::render_gt({
     req(input$pitcher_charts_pitcher)
     
-    metrics <- create_pitcher_metrics_table(
+    shape <- create_pitch_shape_table(
       tm_data,
       input$pitcher_charts_pitcher,
       input$pitcher_charts_daterange,
       input$pitcher_charts_batter_side
     )
     
-    if (is.null(metrics) || nrow(metrics) == 0) {
+    if (is.null(shape) || nrow(shape) == 0) {
       return(gt::gt(tibble(Message = "Insufficient data")))
     }
     
-    metrics %>%
+    shape %>%
       gt::gt() %>%
       gt_theme_guardian() %>%
-      gt::fmt_number(columns = c(`Usage %`, `Strike %`, `Whiff %`, `Z-Whiff %`, `Chase %`, `Zone %`), decimals = 1) %>%
-      gt::fmt_number(columns = c(`AVG`, `SLG`), decimals = 3) %>%
       gt::data_color(
         columns = Pitch,
-        fn = function(x) {
-          sapply(x, function(pt) {
-            if (pt %in% names(pitch_colors)) pitch_colors[[pt]] else "#A9A9A9"
-          })
-        }
+        fn = function(x) sapply(x, function(pt) if (pt %in% names(pitch_colors)) pitch_colors[[pt]] else "#A9A9A9")
       ) %>%
-      gt::tab_header(title = paste("Arsenal:", input$pitcher_charts_pitcher))
+      gt::tab_options(table.font.size = gt::px(11), data_row.padding = gt::px(4))
   })
   
-  # Movement plot
+  # Pitch results table
+  output$pitcher_charts_results_table <- gt::render_gt({
+    req(input$pitcher_charts_pitcher)
+    
+    results <- create_pitch_results_table(
+      tm_data,
+      input$pitcher_charts_pitcher,
+      input$pitcher_charts_daterange,
+      input$pitcher_charts_batter_side
+    )
+    
+    if (is.null(results) || nrow(results) == 0) {
+      return(gt::gt(tibble(Message = "Insufficient data")))
+    }
+    
+    # Color based on league averages
+    results %>%
+      gt::gt() %>%
+      gt_theme_guardian() %>%
+      gt::data_color(
+        columns = Pitch,
+        fn = function(x) sapply(x, function(pt) if (pt %in% names(pitch_colors)) pitch_colors[[pt]] else "#A9A9A9")
+      ) %>%
+      gt::data_color(
+        columns = `Whiff%`,
+        fn = scales::col_numeric(palette = c("#FC8D59", "#FFFFBF", "#91CF60"), domain = c(10, 40), na.color = "#F5F5F5")
+      ) %>%
+      gt::data_color(
+        columns = `Chase%`,
+        fn = scales::col_numeric(palette = c("#FC8D59", "#FFFFBF", "#91CF60"), domain = c(15, 45), na.color = "#F5F5F5")
+      ) %>%
+      gt::data_color(
+        columns = AVG,
+        fn = scales::col_numeric(palette = c("#91CF60", "#FFFFBF", "#FC8D59"), domain = c(0.150, 0.350), na.color = "#F5F5F5")
+      ) %>%
+      gt::tab_options(table.font.size = gt::px(11), data_row.padding = gt::px(4))
+  })
+  
+  # Count usage chart
+  output$pitcher_charts_count_usage <- renderPlot({
+    req(input$pitcher_charts_pitcher)
+    create_count_usage_chart(pitcher_charts_data(), input$pitcher_charts_pitcher)
+  }, bg = "transparent")
+  
+  # Build expected movement grid from full dataset
+  expected_movement_grid <- reactive({
+    build_expected_movement_grid(tm_data)
+  })
+  
+  # Movement plot with expected movement
   output$pitcher_charts_movement <- renderPlot({
     req(input$pitcher_charts_pitcher)
-    create_pitcher_movement_plot(pitcher_charts_data(), input$pitcher_charts_pitcher)
+    create_pitcher_movement_plot(pitcher_charts_data(), input$pitcher_charts_pitcher, expected_movement_grid())
   }, bg = "transparent")
   
   # Dynamic heatmaps for LHH
@@ -5095,15 +5258,12 @@ server <- function(input, output, session) {
     os <- stats$overall
     
     div(
-      style = "display: flex; align-items: center; gap: 20px;",
-      div(
-        style = "flex: 1;",
-        h3(style = "margin: 0; color: #006F71;", input$pitcher_report_pitcher),
-        p(style = "margin: 5px 0; font-size: 14px;",
-          strong("Throws: "), os$throws, " | ",
-          strong("Pitches: "), os$n_pitches, " | ",
-          strong("Avg Velo: "), round(os$avg_velo, 1), " mph")
-      )
+      style = "text-align: center;",
+      h2(style = "margin: 0; color: white; text-shadow: 1px 1px 2px black;", input$pitcher_report_pitcher),
+      p(style = "margin: 5px 0; font-size: 14px; color: white;",
+        strong("Throws: "), os$throws, " | ",
+        strong("n = "), os$n_pitches, " pitches | ",
+        strong("Avg Velo: "), round(os$avg_velo, 1), " mph")
     )
   })
   
@@ -5134,6 +5294,48 @@ server <- function(input, output, session) {
     )
   })
   
+  # Report shape table
+  output$pitcher_report_shape_table <- gt::render_gt({
+    req(input$pitcher_report_pitcher)
+    
+    shape <- create_pitch_shape_table(tm_data, input$pitcher_report_pitcher)
+    
+    if (is.null(shape) || nrow(shape) == 0) {
+      return(gt::gt(tibble(Message = "No data")))
+    }
+    
+    shape %>%
+      select(Pitch, `#`, Usage, Velo, `Velo Range`, Spin, IVB, HB) %>%
+      gt::gt() %>%
+      gt_theme_guardian() %>%
+      gt::tab_options(table.font.size = gt::px(9), data_row.padding = gt::px(2))
+  })
+  
+  # Report results table
+  output$pitcher_report_results_table <- gt::render_gt({
+    req(input$pitcher_report_pitcher)
+    
+    results <- create_pitch_results_table(tm_data, input$pitcher_report_pitcher)
+    
+    if (is.null(results) || nrow(results) == 0) {
+      return(gt::gt(tibble(Message = "No data")))
+    }
+    
+    results %>%
+      select(Pitch, `Whiff%`, `CSW%`, `Chase%`, AVG, SLG) %>%
+      gt::gt() %>%
+      gt_theme_guardian() %>%
+      gt::data_color(columns = `Whiff%`, fn = scales::col_numeric(c("#FC8D59", "#FFFFBF", "#91CF60"), c(10, 40), na.color = "#F5F5F5")) %>%
+      gt::data_color(columns = AVG, fn = scales::col_numeric(c("#91CF60", "#FFFFBF", "#FC8D59"), c(0.15, 0.35), na.color = "#F5F5F5")) %>%
+      gt::tab_options(table.font.size = gt::px(9), data_row.padding = gt::px(2))
+  })
+  
+  # Report count usage
+  output$pitcher_report_count_usage <- renderPlot({
+    req(input$pitcher_report_pitcher)
+    create_count_usage_chart(tm_data, input$pitcher_report_pitcher)
+  }, bg = "transparent")
+  
   # Report arm slot
   output$pitcher_report_arm_slot <- renderPlot({
     req(input$pitcher_report_pitcher)
@@ -5143,40 +5345,40 @@ server <- function(input, output, session) {
   # Report movement
   output$pitcher_report_movement <- renderPlot({
     req(input$pitcher_report_pitcher)
-    create_pitcher_movement_plot(tm_data, input$pitcher_report_pitcher)
+    create_pitcher_movement_plot(tm_data, input$pitcher_report_pitcher, expected_movement_grid())
   }, bg = "transparent")
   
-  # Report arsenal table
-  output$pitcher_report_arsenal_table <- gt::render_gt({
-    req(input$pitcher_report_pitcher)
-    
-    metrics <- create_pitcher_metrics_table(tm_data, input$pitcher_report_pitcher)
-    
-    if (is.null(metrics) || nrow(metrics) == 0) {
-      return(gt::gt(tibble(Message = "No data")))
-    }
-    
-    metrics %>%
-      select(Pitch, `#`, `Usage %`, Velo, `Whiff %`, `Chase %`, `AVG`) %>%
-      gt::gt() %>%
-      gt_theme_guardian() %>%
-      gt::fmt_number(columns = c(`Usage %`, `Whiff %`, `Chase %`), decimals = 1) %>%
-      gt::fmt_number(columns = AVG, decimals = 3)
-  })
-  
-  # Report LHH heatmap
-  output$pitcher_report_heatmap_lhh <- renderPlot({
+  # Report heatmaps - LHH All
+  output$pitcher_report_hm_lhh_all <- renderPlot({
     req(input$pitcher_report_pitcher)
     create_pitcher_heatmap(tm_data, input$pitcher_report_pitcher, NULL, "Left", "all")
   }, bg = "transparent")
   
-  # Report RHH heatmap
-  output$pitcher_report_heatmap_rhh <- renderPlot({
+  # Report heatmaps - LHH Whiff
+  output$pitcher_report_hm_lhh_whiff <- renderPlot({
+    req(input$pitcher_report_pitcher)
+    create_pitcher_heatmap(tm_data, input$pitcher_report_pitcher, NULL, "Left", "Whiffs")
+  }, bg = "transparent")
+  
+  # Report heatmaps - RHH All
+  output$pitcher_report_hm_rhh_all <- renderPlot({
     req(input$pitcher_report_pitcher)
     create_pitcher_heatmap(tm_data, input$pitcher_report_pitcher, NULL, "Right", "all")
   }, bg = "transparent")
   
-  # PDF download handler for pitcher report
+  # Report heatmaps - RHH Whiff
+  output$pitcher_report_hm_rhh_whiff <- renderPlot({
+    req(input$pitcher_report_pitcher)
+    create_pitcher_heatmap(tm_data, input$pitcher_report_pitcher, NULL, "Right", "Whiffs")
+  }, bg = "transparent")
+  
+  # Report whiff movement
+  output$pitcher_report_whiff_movement <- renderPlot({
+    req(input$pitcher_report_pitcher)
+    create_pitcher_whiff_movement(tm_data, input$pitcher_report_pitcher)
+  }, bg = "transparent")
+  
+  # PDF download handler for pitcher report - PORTRAIT with expanded content
   output$download_pitcher_pdf <- downloadHandler(
     filename = function() {
       paste0(gsub(" ", "_", input$pitcher_report_pitcher), "_Report_", format(Sys.Date(), "%Y%m%d"), ".pdf")
@@ -5197,22 +5399,22 @@ server <- function(input, output, session) {
       
       if (length(dev.list()) > 0) try(dev.off(), silent = TRUE)
       
-      # Create PDF - letter size landscape
-      pdf(file, width = 11, height = 8.5, paper = "USr")
+      # Create PDF - PORTRAIT letter size
+      pdf(file, width = 8.5, height = 11, paper = "letter")
       
       grid::grid.newpage()
       
-      # Header
-      grid::grid.rect(x = 0.5, y = 0.96, width = 1, height = 0.08, just = c("center", "top"),
+      # Header bar
+      grid::grid.rect(x = 0.5, y = 0.97, width = 1, height = 0.06, just = c("center", "top"),
                       gp = grid::gpar(fill = "#006F71", col = NA))
       grid::grid.text(input$pitcher_report_title,
-                      x = 0.5, y = 0.93,
-                      gp = grid::gpar(fontsize = 20, fontface = "bold", col = "white"))
+                      x = 0.5, y = 0.945,
+                      gp = grid::gpar(fontsize = 16, fontface = "bold", col = "white"))
       
       # Pitcher name
       grid::grid.text(pitcher_name,
-                      x = 0.5, y = 0.85,
-                      gp = grid::gpar(fontsize = 24, fontface = "bold", col = "#006F71"))
+                      x = 0.5, y = 0.885,
+                      gp = grid::gpar(fontsize = 20, fontface = "bold", col = "#006F71"))
       
       # Stats row
       os <- stats$overall
@@ -5220,44 +5422,83 @@ server <- function(input, output, session) {
       ba_rhh <- if (!is.null(stats$vs_rhh) && !is.na(stats$vs_rhh$ba)) sprintf(".%03d", round(stats$vs_rhh$ba * 1000)) else "-"
       
       stats_text <- paste0(
-        "Throws: ", os$throws, "  |  n=", os$n_pitches,
-        "  |  Velo: ", round(os$avg_velo, 1), "-", round(os$max_velo, 1),
-        "  |  K%: ", round(os$k_pct, 1), "%",
-        "  |  Whiff%: ", round(os$whiff_pct, 1), "%",
-        "  |  vLHH: ", ba_lhh, "  |  vRHH: ", ba_rhh
+        os$throws, "-handed  |  n=", os$n_pitches,
+        "  |  Velo: ", round(os$avg_velo, 1), " mph"
       )
-      grid::grid.text(stats_text, x = 0.5, y = 0.78,
-                      gp = grid::gpar(fontsize = 11, col = "gray30"))
+      grid::grid.text(stats_text, x = 0.5, y = 0.855, gp = grid::gpar(fontsize = 10, col = "gray30"))
       
-      # Arm slot plot (left)
+      # Rate stats line
+      rate_text <- paste0(
+        "Strike%: ", round(os$strike_pct, 1), "  |  Whiff%: ", round(os$whiff_pct, 1),
+        "  |  Chase%: ", round(os$chase_pct, 1), "  |  K%: ", round(os$k_pct, 1),
+        "  |  BB%: ", round(os$bb_hbp_pct, 1)
+      )
+      grid::grid.text(rate_text, x = 0.5, y = 0.825, gp = grid::gpar(fontsize = 9, col = "gray40"))
+      
+      ba_text <- paste0("BAA vs LHH: ", ba_lhh, "  |  BAA vs RHH: ", ba_rhh)
+      grid::grid.text(ba_text, x = 0.5, y = 0.800, gp = grid::gpar(fontsize = 9, col = "gray40"))
+      
+      # Arm slot plot (compact left)
       arm_plot <- create_pitcher_arm_angle_plot(tm_data, pitcher_name)
-      grid::pushViewport(grid::viewport(x = 0.25, y = 0.50, width = 0.40, height = 0.45, just = c("center", "center")))
+      grid::pushViewport(grid::viewport(x = 0.22, y = 0.69, width = 0.38, height = 0.20, just = c("center", "center")))
       print(arm_plot, newpage = FALSE)
       grid::popViewport()
       
-      # Movement plot (right)
-      mvmt_plot <- create_pitcher_movement_plot(tm_data, pitcher_name)
-      grid::pushViewport(grid::viewport(x = 0.75, y = 0.50, width = 0.40, height = 0.45, just = c("center", "center")))
+      # Movement plot (right) with expected movement
+      exp_grid <- build_expected_movement_grid(tm_data)
+      mvmt_plot <- create_pitcher_movement_plot(tm_data, pitcher_name, exp_grid)
+      grid::pushViewport(grid::viewport(x = 0.72, y = 0.69, width = 0.50, height = 0.23, just = c("center", "center")))
       print(mvmt_plot, newpage = FALSE)
       grid::popViewport()
       
-      # Heatmaps at bottom
-      hm_lhh <- create_pitcher_heatmap(tm_data, pitcher_name, NULL, "Left", "all")
-      hm_rhh <- create_pitcher_heatmap(tm_data, pitcher_name, NULL, "Right", "all")
-      
-      grid::grid.text("vs LHH", x = 0.25, y = 0.20, gp = grid::gpar(fontsize = 10, fontface = "bold"))
-      grid::pushViewport(grid::viewport(x = 0.25, y = 0.10, width = 0.20, height = 0.18, just = c("center", "center")))
-      print(hm_lhh, newpage = FALSE)
+      # Count usage chart (full width, middle)
+      grid::grid.text("Pitch Usage by Count", x = 0.5, y = 0.545, gp = grid::gpar(fontsize = 10, fontface = "bold", col = "#006F71"))
+      count_plot <- create_count_usage_chart(tm_data, pitcher_name)
+      grid::pushViewport(grid::viewport(x = 0.5, y = 0.43, width = 0.95, height = 0.20, just = c("center", "center")))
+      print(count_plot, newpage = FALSE)
       grid::popViewport()
       
-      grid::grid.text("vs RHH", x = 0.75, y = 0.20, gp = grid::gpar(fontsize = 10, fontface = "bold"))
-      grid::pushViewport(grid::viewport(x = 0.75, y = 0.10, width = 0.20, height = 0.18, just = c("center", "center")))
-      print(hm_rhh, newpage = FALSE)
+      # Heatmaps section header
+      grid::grid.text("Location Heatmaps", x = 0.5, y = 0.31, gp = grid::gpar(fontsize = 10, fontface = "bold", col = "#006F71"))
+      
+      # vs LHH heatmaps
+      grid::grid.text("vs LHH - All", x = 0.15, y = 0.275, gp = grid::gpar(fontsize = 8, fontface = "bold"))
+      hm_lhh_all <- create_pitcher_heatmap(tm_data, pitcher_name, NULL, "Left", "all")
+      grid::pushViewport(grid::viewport(x = 0.15, y = 0.19, width = 0.18, height = 0.15, just = c("center", "center")))
+      print(hm_lhh_all, newpage = FALSE)
+      grid::popViewport()
+      
+      grid::grid.text("vs LHH - Whiffs", x = 0.38, y = 0.275, gp = grid::gpar(fontsize = 8, fontface = "bold"))
+      hm_lhh_whiff <- create_pitcher_heatmap(tm_data, pitcher_name, NULL, "Left", "Whiffs")
+      grid::pushViewport(grid::viewport(x = 0.38, y = 0.19, width = 0.18, height = 0.15, just = c("center", "center")))
+      print(hm_lhh_whiff, newpage = FALSE)
+      grid::popViewport()
+      
+      # vs RHH heatmaps
+      grid::grid.text("vs RHH - All", x = 0.62, y = 0.275, gp = grid::gpar(fontsize = 8, fontface = "bold"))
+      hm_rhh_all <- create_pitcher_heatmap(tm_data, pitcher_name, NULL, "Right", "all")
+      grid::pushViewport(grid::viewport(x = 0.62, y = 0.19, width = 0.18, height = 0.15, just = c("center", "center")))
+      print(hm_rhh_all, newpage = FALSE)
+      grid::popViewport()
+      
+      grid::grid.text("vs RHH - Whiffs", x = 0.85, y = 0.275, gp = grid::gpar(fontsize = 8, fontface = "bold"))
+      hm_rhh_whiff <- create_pitcher_heatmap(tm_data, pitcher_name, NULL, "Right", "Whiffs")
+      grid::pushViewport(grid::viewport(x = 0.85, y = 0.19, width = 0.18, height = 0.15, just = c("center", "center")))
+      print(hm_rhh_whiff, newpage = FALSE)
+      grid::popViewport()
+      
+      # Whiff movement chart at bottom
+      grid::grid.text("Whiff Movement Profile", x = 0.5, y = 0.095, gp = grid::gpar(fontsize = 10, fontface = "bold", col = "#006F71"))
+      whiff_plot <- create_pitcher_whiff_movement(tm_data, pitcher_name)
+      grid::pushViewport(grid::viewport(x = 0.5, y = 0.035, width = 0.75, height = 0.10, just = c("center", "center")))
+      print(whiff_plot, newpage = FALSE)
       grid::popViewport()
       
       # Footer
-      grid::grid.text(format(Sys.Date(), "%B %d, %Y"), x = 0.95, y = 0.02, just = "right",
-                      gp = grid::gpar(cex = 0.6, col = "gray50"))
+      grid::grid.text(format(Sys.Date(), "%B %d, %Y"), x = 0.95, y = 0.01, just = "right",
+                      gp = grid::gpar(cex = 0.5, col = "gray50"))
+      grid::grid.text("Generated by Advanced Scouting App", x = 0.05, y = 0.01, just = "left",
+                      gp = grid::gpar(cex = 0.5, col = "gray50"))
       
       dev.off()
       
