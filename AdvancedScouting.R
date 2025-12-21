@@ -1405,10 +1405,10 @@ create_metric_heatmap <- function(tm_data, batter_name, pitch_family, pitcher_ha
           guide = "none"
         )
     } else {
-      # Density weighted by pitcher run value (positive = good for pitcher)
+      # Density heatmap showing pitch locations (pitcher perspective)
       p <- ggplot(plot_data, aes(x = PlateLocSide, y = PlateLocHeight)) +
         stat_density_2d(
-          aes(fill = after_stat(density), weight = rv_pitcher + 0.5),
+          aes(fill = after_stat(density)),
           geom = "raster", 
           contour = FALSE,
           h = c(0.5 * bw_adjust, 0.6 * bw_adjust),
@@ -1453,10 +1453,10 @@ create_metric_heatmap <- function(tm_data, batter_name, pitch_family, pitcher_ha
         ) +
         scale_size_continuous(range = c(1.5, 4), guide = "none")
     } else {
-      # Density weighted by damage
+      # Density heatmap showing contact locations
       p <- ggplot(bip_data, aes(x = PlateLocSide, y = PlateLocHeight)) +
         stat_density_2d(
-          aes(fill = after_stat(density), weight = damage),
+          aes(fill = after_stat(density)),
           geom = "raster", 
           contour = FALSE,
           h = c(0.5 * bw_adjust, 0.6 * bw_adjust),
@@ -1584,11 +1584,11 @@ create_mini_spray <- function(tm_data, batter_name, filter_type = "all", filter_
   
   ggplot(chart_data, aes(x, y)) +
     # Foul lines
-    geom_segment(aes(x = 0, y = 0, xend = 247.487, yend = 247.487), color = "gray60", linewidth = 0.3) +
-    geom_segment(aes(x = 0, y = 0, xend = -247.487, yend = 247.487), color = "gray60", linewidth = 0.3) +
+    annotate("segment", x = 0, y = 0, xend = 247.487, yend = 247.487, color = "gray60", linewidth = 0.3) +
+    annotate("segment", x = 0, y = 0, xend = -247.487, yend = 247.487, color = "gray60", linewidth = 0.3) +
     # Infield
-    geom_segment(aes(x = 63.6, y = 63.6, xend = 0, yend = 127.3), color = "gray60", linewidth = 0.3) +
-    geom_segment(aes(x = -63.6, y = 63.6, xend = 0, yend = 127.3), color = "gray60", linewidth = 0.3) +
+    annotate("segment", x = 63.6, y = 63.6, xend = 0, yend = 127.3, color = "gray60", linewidth = 0.3) +
+    annotate("segment", x = -63.6, y = 63.6, xend = 0, yend = 127.3, color = "gray60", linewidth = 0.3) +
     # Outfield fence arc
     annotate("curve", x = -247.487, y = 247.487, xend = 247.487, yend = 247.487,
              curvature = -0.65, linewidth = 0.3, color = "gray60") +
@@ -2445,7 +2445,7 @@ create_similar_pitches_movement <- function(similar_data, color_by = "pitch_type
         TRUE ~ "Other"
       ))
     base_plot + 
-      geom_point(aes(color = pitch_type_label), size = 2.5, alpha = 0.7) +
+      geom_point(data = plot_data, aes(color = pitch_type_label), size = 2.5, alpha = 0.7) +
       scale_color_manual(values = c("Fastball" = "#D73027", "Breaking" = "#4575B4", "Offspeed" = "#1A9850", "Other" = "gray60"), name = "") +
       labs(title = "Pitch Movement", subtitle = "By pitch type", x = "Horz Break", y = "IVB")
     
@@ -2467,7 +2467,7 @@ create_similar_pitches_movement <- function(similar_data, color_by = "pitch_type
         TRUE ~ "Other"
       ))
     base_plot + 
-      geom_point(aes(color = outcome_label), size = 2.5, alpha = 0.7) +
+      geom_point(data = plot_data, aes(color = outcome_label), size = 2.5, alpha = 0.7) +
       scale_color_manual(values = c("Hit" = "#1A9850", "Whiff" = "#4575B4", "Out" = "#D73027", "Other" = "gray60"), name = "") +
       labs(title = "Pitch Movement", subtitle = "By outcome", x = "Horz Break", y = "IVB")
   } else {
@@ -2480,7 +2480,7 @@ create_similar_pitches_movement <- function(similar_data, color_by = "pitch_type
         TRUE ~ "Other"
       ))
     base_plot + 
-      geom_point(aes(color = pitch_type_label), size = 2.5, alpha = 0.7) +
+      geom_point(data = plot_data, aes(color = pitch_type_label), size = 2.5, alpha = 0.7) +
       scale_color_manual(values = c("Fastball" = "#D73027", "Breaking" = "#4575B4", "Offspeed" = "#1A9850", "Other" = "gray60"), name = "") +
       labs(title = "Pitch Movement", x = "Horz Break", y = "IVB")
   }
