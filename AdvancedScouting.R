@@ -3094,7 +3094,7 @@ server <- function(input, output, session) {
                   plotOutput(paste0("pie_rhp_putaway_", safe_name), height = "45px"))
             ),
             # Swing% Heatmaps row (where they swing)
-            div(style = "font-size: 7px; font-weight: bold; color: #666; margin: 2px 0 1px 0;", "Whiff% (blue=whiff)"),
+            div(style = "font-size: 7px; font-weight: bold; color: #666; margin: 2px 0 1px 0;", "Whiff%"),
             div(
               style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px;",
               div(style = "text-align: center;",
@@ -3108,7 +3108,7 @@ server <- function(input, output, session) {
                   plotOutput(paste0("hm_rhp_whiff_os_", safe_name), height = "55px"))
             ),
             # xValue Heatmaps row (combined pitch value)
-            div(style = "font-size: 7px; font-weight: bold; color: #666; margin: 2px 0 1px 0;", "xValue (blue=pitch here)"),
+            div(style = "font-size: 7px; font-weight: bold; color: #666; margin: 2px 0 1px 0;", "xValue"),
             div(
               style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px;",
               div(style = "text-align: center;",
@@ -3119,7 +3119,7 @@ server <- function(input, output, session) {
                   plotOutput(paste0("hm_rhp_xval_os_", safe_name), height = "55px"))
             ),
             # xDamage Heatmaps row (expected damage if contact)
-            div(style = "font-size: 7px; font-weight: bold; color: #666; margin: 2px 0 1px 0;", "xDamage (red=danger)"),
+            div(style = "font-size: 7px; font-weight: bold; color: #666; margin: 2px 0 1px 0;", "xDamage"),
             div(
               style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px;",
               div(style = "text-align: center;",
@@ -3149,7 +3149,7 @@ server <- function(input, output, session) {
                   plotOutput(paste0("pie_lhp_putaway_", safe_name), height = "45px"))
             ),
             # Swing% Heatmaps row (where they swing)
-            div(style = "font-size: 7px; font-weight: bold; color: #666; margin: 2px 0 1px 0;", "Whiff% (blue=whiff)"),
+            div(style = "font-size: 7px; font-weight: bold; color: #666; margin: 2px 0 1px 0;", "Whiff%"),
             div(
               style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px;",
               div(style = "text-align: center;",
@@ -3163,7 +3163,7 @@ server <- function(input, output, session) {
                   plotOutput(paste0("hm_lhp_whiff_os_", safe_name), height = "55px"))
             ),
             # xValue Heatmaps row (combined pitch value)
-            div(style = "font-size: 7px; font-weight: bold; color: #666; margin: 2px 0 1px 0;", "xValue (blue=pitch here)"),
+            div(style = "font-size: 7px; font-weight: bold; color: #666; margin: 2px 0 1px 0;", "xValue"),
             div(
               style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px;",
               div(style = "text-align: center;",
@@ -3174,7 +3174,7 @@ server <- function(input, output, session) {
                   plotOutput(paste0("hm_lhp_xval_os_", safe_name), height = "55px"))
             ),
             # xDamage Heatmaps row (expected damage if contact)
-            div(style = "font-size: 7px; font-weight: bold; color: #666; margin: 2px 0 1px 0;", "xDamage (red=danger)"),
+            div(style = "font-size: 7px; font-weight: bold; color: #666; margin: 2px 0 1px 0;", "xDamage"),
             div(
               style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px;",
               div(style = "text-align: center;",
