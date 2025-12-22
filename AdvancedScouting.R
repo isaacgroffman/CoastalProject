@@ -3750,7 +3750,7 @@ ui <- fluidPage(
                   )
               ),
               
-              # Report Preview - Portrait Layout
+              # Report Preview - Portrait Layout (matches PDF)
               div(style = "background: white; padding: 20px; border-radius: 8px; border: 1px solid #ddd; max-width: 850px; margin: 0 auto;",
                   h5("Report Preview (Portrait)", style = "color: #006F71; margin-bottom: 15px; text-align: center;"),
                   
@@ -3764,67 +3764,75 @@ ui <- fluidPage(
                       uiOutput("pitcher_report_stats_row")
                   ),
                   
-                  # Tables Row
-                  fluidRow(
-                    column(6,
-                           div(style = "border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-bottom: 15px;",
-                               h6("Pitch Shape", style = "text-align: center; color: #006F71; margin-bottom: 8px;"),
-                               gt::gt_output("pitcher_report_shape_table")
-                           )
-                    ),
-                    column(6,
-                           div(style = "border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-bottom: 15px;",
-                               h6("Pitch Results", style = "text-align: center; color: #006F71; margin-bottom: 8px;"),
-                               gt::gt_output("pitcher_report_results_table")
-                           )
-                    )
-                  ),
-                  
-                  # Count Usage Chart
-                  div(style = "border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-bottom: 15px;",
-                      h6("Pitch Usage by Count", style = "text-align: center; color: #006F71;"),
-                      plotOutput("pitcher_report_count_usage", height = "220px")
-                  ),
-                  
-                  # Charts Row
+                  # === ARM SLOT AND MOVEMENT AT TOP (BIGGEST) ===
                   fluidRow(
                     column(5,
-                           div(style = "border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-bottom: 15px;",
-                               h6("Arm Slot", style = "text-align: center; color: #006F71;"),
-                               plotOutput("pitcher_report_arm_slot", height = "180px")
+                           div(style = "border: 2px solid #006F71; border-radius: 8px; padding: 10px; margin-bottom: 15px;",
+                               h5("Arm Slot", style = "text-align: center; color: #006F71; margin-bottom: 5px;"),
+                               plotOutput("pitcher_report_arm_slot", height = "220px")
                            )
                     ),
                     column(7,
-                           div(style = "border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-bottom: 15px;",
-                               h6("Pitch Movement", style = "text-align: center; color: #006F71;"),
-                               plotOutput("pitcher_report_movement", height = "180px")
+                           div(style = "border: 2px solid #006F71; border-radius: 8px; padding: 10px; margin-bottom: 15px;",
+                               h5("Pitch Movement (Batter's View)", style = "text-align: center; color: #006F71; margin-bottom: 5px;"),
+                               plotOutput("pitcher_report_movement", height = "220px")
                            )
                     )
                   ),
                   
-                  # Heatmaps Row - 4 columns (2 per side)
-                  h6("Location Heatmaps", style = "text-align: center; color: #006F71; margin-bottom: 10px;"),
+                  # Count Usage Chart (simplified)
+                  div(style = "border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-bottom: 15px;",
+                      h6("Pitch Usage by Count", style = "text-align: center; color: #006F71;"),
+                      plotOutput("pitcher_report_count_usage", height = "180px")
+                  ),
+                  
+                  # Heatmaps - By Pitch Group (FB, BB, OS) and Batter Hand
+                  h6("Location Heatmaps by Pitch Group", style = "text-align: center; color: #006F71; margin-bottom: 10px;"),
                   fluidRow(
                     column(6,
                            div(style = "text-align: center; font-weight: bold; margin-bottom: 5px; color: #666;", "vs LHH"),
-                           div(style = "display: flex; justify-content: center; gap: 10px;",
-                               div(plotOutput("pitcher_report_hm_lhh_all", height = "120px", width = "100px")),
-                               div(plotOutput("pitcher_report_hm_lhh_whiff", height = "120px", width = "100px"))
+                           div(style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px;",
+                               div(style = "text-align: center;",
+                                   div(style = "font-size: 9px; color: #1f77b4; font-weight: bold;", "FB"),
+                                   plotOutput("pitcher_report_hm_lhh_fb", height = "100px")),
+                               div(style = "text-align: center;",
+                                   div(style = "font-size: 9px; color: #9370DB; font-weight: bold;", "BB"),
+                                   plotOutput("pitcher_report_hm_lhh_bb", height = "100px")),
+                               div(style = "text-align: center;",
+                                   div(style = "font-size: 9px; color: #2E8B57; font-weight: bold;", "OS"),
+                                   plotOutput("pitcher_report_hm_lhh_os", height = "100px"))
                            )
                     ),
                     column(6,
                            div(style = "text-align: center; font-weight: bold; margin-bottom: 5px; color: #666;", "vs RHH"),
-                           div(style = "display: flex; justify-content: center; gap: 10px;",
-                               div(plotOutput("pitcher_report_hm_rhh_all", height = "120px", width = "100px")),
-                               div(plotOutput("pitcher_report_hm_rhh_whiff", height = "120px", width = "100px"))
+                           div(style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px;",
+                               div(style = "text-align: center;",
+                                   div(style = "font-size: 9px; color: #1f77b4; font-weight: bold;", "FB"),
+                                   plotOutput("pitcher_report_hm_rhh_fb", height = "100px")),
+                               div(style = "text-align: center;",
+                                   div(style = "font-size: 9px; color: #9370DB; font-weight: bold;", "BB"),
+                                   plotOutput("pitcher_report_hm_rhh_bb", height = "100px")),
+                               div(style = "text-align: center;",
+                                   div(style = "font-size: 9px; color: #2E8B57; font-weight: bold;", "OS"),
+                                   plotOutput("pitcher_report_hm_rhh_os", height = "100px"))
                            )
                     )
                   ),
                   
-                  # Whiff Movement
-                  div(style = "border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-top: 15px;",
-                      h6("Whiff Locations by Movement", style = "text-align: center; color: #006F71;"),
-                      plotOutput("pitcher_report_whiff_movement", height = "200px")
+                  # Tables Row (smaller, at bottom)
+                  fluidRow(style = "margin-top: 15px;",
+                    column(6,
+                           div(style = "border: 1px solid #ddd; border-radius: 8px; padding: 8px;",
+                               h6("Pitch Shape", style = "text-align: center; color: #006F71; margin-bottom: 5px; font-size: 11px;"),
+                               gt::gt_output("pitcher_report_shape_table")
+                           )
+                    ),
+                    column(6,
+                           div(style = "border: 1px solid #ddd; border-radius: 8px; padding: 8px;",
+                               h6("Pitch Results", style = "text-align: center; color: #006F71; margin-bottom: 5px; font-size: 11px;"),
+                               gt::gt_output("pitcher_report_results_table")
+                           )
+                    )
                   )
               )
           )
@@ -6777,37 +6785,40 @@ server <- function(input, output, session) {
     create_pitcher_movement_plot(tm_data, input$pitcher_report_pitcher, expected_movement_grid())
   }, bg = "transparent")
   
-  # Report heatmaps - LHH All
-  output$pitcher_report_hm_lhh_all <- renderPlot({
+  # Report heatmaps - By Pitch Group (FB, BB, OS) and Batter Hand
+  # LHH heatmaps
+  output$pitcher_report_hm_lhh_fb <- renderPlot({
     req(input$pitcher_report_pitcher)
-    create_pitcher_heatmap(tm_data, input$pitcher_report_pitcher, NULL, "Left", "all")
+    create_pitcher_heatmap(tm_data, input$pitcher_report_pitcher, "FB", "Left", "all")
   }, bg = "transparent")
   
-  # Report heatmaps - LHH Whiff
-  output$pitcher_report_hm_lhh_whiff <- renderPlot({
+  output$pitcher_report_hm_lhh_bb <- renderPlot({
     req(input$pitcher_report_pitcher)
-    create_pitcher_heatmap(tm_data, input$pitcher_report_pitcher, NULL, "Left", "Whiffs")
+    create_pitcher_heatmap(tm_data, input$pitcher_report_pitcher, "BB", "Left", "all")
   }, bg = "transparent")
   
-  # Report heatmaps - RHH All
-  output$pitcher_report_hm_rhh_all <- renderPlot({
+  output$pitcher_report_hm_lhh_os <- renderPlot({
     req(input$pitcher_report_pitcher)
-    create_pitcher_heatmap(tm_data, input$pitcher_report_pitcher, NULL, "Right", "all")
+    create_pitcher_heatmap(tm_data, input$pitcher_report_pitcher, "OS", "Left", "all")
   }, bg = "transparent")
   
-  # Report heatmaps - RHH Whiff
-  output$pitcher_report_hm_rhh_whiff <- renderPlot({
+  # RHH heatmaps
+  output$pitcher_report_hm_rhh_fb <- renderPlot({
     req(input$pitcher_report_pitcher)
-    create_pitcher_heatmap(tm_data, input$pitcher_report_pitcher, NULL, "Right", "Whiffs")
+    create_pitcher_heatmap(tm_data, input$pitcher_report_pitcher, "FB", "Right", "all")
   }, bg = "transparent")
   
-  # Report whiff movement
-  output$pitcher_report_whiff_movement <- renderPlot({
+  output$pitcher_report_hm_rhh_bb <- renderPlot({
     req(input$pitcher_report_pitcher)
-    create_pitcher_whiff_movement(tm_data, input$pitcher_report_pitcher)
+    create_pitcher_heatmap(tm_data, input$pitcher_report_pitcher, "BB", "Right", "all")
   }, bg = "transparent")
   
-  # PDF download handler for pitcher report - PORTRAIT with expanded content
+  output$pitcher_report_hm_rhh_os <- renderPlot({
+    req(input$pitcher_report_pitcher)
+    create_pitcher_heatmap(tm_data, input$pitcher_report_pitcher, "OS", "Right", "all")
+  }, bg = "transparent")
+  
+  # PDF download handler for pitcher report - PORTRAIT with arm angle/movement at top
   output$download_pitcher_pdf <- downloadHandler(
     filename = function() {
       paste0(gsub(" ", "_", input$pitcher_report_pitcher), "_Report_", format(Sys.Date(), "%Y%m%d"), ".pdf")
@@ -6833,100 +6844,116 @@ server <- function(input, output, session) {
       
       grid::grid.newpage()
       
-      # Header bar
-      grid::grid.rect(x = 0.5, y = 0.97, width = 1, height = 0.06, just = c("center", "top"),
-                      gp = grid::gpar(fill = "#006F71", col = NA))
-      grid::grid.text(input$pitcher_report_title,
-                      x = 0.5, y = 0.945,
-                      gp = grid::gpar(fontsize = 16, fontface = "bold", col = "white"))
-      
-      # Pitcher name
-      grid::grid.text(pitcher_name,
-                      x = 0.5, y = 0.885,
-                      gp = grid::gpar(fontsize = 20, fontface = "bold", col = "#006F71"))
-      
-      # Stats row
       os <- stats$overall
+      by_pitch <- stats$by_pitch
+      
+      # Get pitch-type specific velo
+      fb_pitches <- c("Fastball", "Sinker", "FourSeamFastBall", "TwoSeamFastBall")
+      bb_pitches <- c("Slider", "Curveball", "Sweeper", "Slurve", "Cutter")
+      os_pitches <- c("ChangeUp", "Splitter", "Knuckleball")
+      
+      fb_velo <- by_pitch %>% filter(TaggedPitchType %in% fb_pitches) %>% 
+        summarise(v = weighted.mean(velo_avg, n, na.rm = TRUE)) %>% pull(v)
+      bb_velo <- by_pitch %>% filter(TaggedPitchType %in% bb_pitches) %>% 
+        summarise(v = weighted.mean(velo_avg, n, na.rm = TRUE)) %>% pull(v)
+      os_velo_val <- by_pitch %>% filter(TaggedPitchType %in% os_pitches) %>% 
+        summarise(v = weighted.mean(velo_avg, n, na.rm = TRUE)) %>% pull(v)
+      
       ba_lhh <- if (!is.null(stats$vs_lhh) && !is.na(stats$vs_lhh$ba)) sprintf(".%03d", round(stats$vs_lhh$ba * 1000)) else "-"
       ba_rhh <- if (!is.null(stats$vs_rhh) && !is.na(stats$vs_rhh$ba)) sprintf(".%03d", round(stats$vs_rhh$ba * 1000)) else "-"
       
-      stats_text <- paste0(
-        os$throws, "-handed  |  n=", os$n_pitches,
-        "  |  Velo: ", round(os$avg_velo, 1), " mph"
+      # Header bar
+      grid::grid.rect(x = 0.5, y = 0.98, width = 1, height = 0.04, just = c("center", "top"),
+                      gp = grid::gpar(fill = "#006F71", col = NA))
+      grid::grid.text(pitcher_name, x = 0.5, y = 0.96,
+                      gp = grid::gpar(fontsize = 18, fontface = "bold", col = "white"))
+      
+      # Pitch-type velo and stats (compact)
+      velo_text <- paste(
+        if (!is.na(fb_velo)) paste0("FB: ", round(fb_velo, 1)) else NULL,
+        if (!is.na(bb_velo)) paste0("BB: ", round(bb_velo, 1)) else NULL,
+        if (!is.na(os_velo_val)) paste0("OS: ", round(os_velo_val, 1)) else NULL,
+        collapse = " | "
       )
-      grid::grid.text(stats_text, x = 0.5, y = 0.855, gp = grid::gpar(fontsize = 10, col = "gray30"))
+      grid::grid.text(paste0(os$throws, " | n=", os$n_pitches, " | ", velo_text),
+                      x = 0.5, y = 0.925, gp = grid::gpar(fontsize = 10, col = "gray30"))
       
-      # Rate stats line
-      rate_text <- paste0(
-        "Strike%: ", round(os$strike_pct, 1), "  |  Whiff%: ", round(os$whiff_pct, 1),
-        "  |  Chase%: ", round(os$chase_pct, 1), "  |  K%: ", round(os$k_pct, 1),
-        "  |  BB%: ", round(os$bb_hbp_pct, 1)
-      )
-      grid::grid.text(rate_text, x = 0.5, y = 0.825, gp = grid::gpar(fontsize = 9, col = "gray40"))
+      rate_text <- paste0("K%: ", round(os$k_pct, 1), " | BB%: ", round(os$bb_hbp_pct, 1),
+                          " | Whiff%: ", round(os$whiff_pct, 1), " | Chase%: ", round(os$chase_pct, 1),
+                          " | BAA vL: ", ba_lhh, " vR: ", ba_rhh)
+      grid::grid.text(rate_text, x = 0.5, y = 0.90, gp = grid::gpar(fontsize = 8, col = "gray40"))
       
-      ba_text <- paste0("BAA vs LHH: ", ba_lhh, "  |  BAA vs RHH: ", ba_rhh)
-      grid::grid.text(ba_text, x = 0.5, y = 0.800, gp = grid::gpar(fontsize = 9, col = "gray40"))
-      
-      # Arm slot plot (compact left)
+      # === ARM ANGLE AND MOVEMENT AT TOP (BIGGEST CHARTS) ===
+      # Arm slot (left, large)
+      grid::grid.text("Arm Slot", x = 0.25, y = 0.87, gp = grid::gpar(fontsize = 11, fontface = "bold", col = "#006F71"))
       arm_plot <- create_pitcher_arm_angle_plot(tm_data, pitcher_name)
-      grid::pushViewport(grid::viewport(x = 0.22, y = 0.69, width = 0.38, height = 0.20, just = c("center", "center")))
+      grid::pushViewport(grid::viewport(x = 0.25, y = 0.72, width = 0.42, height = 0.28, just = c("center", "center")))
       print(arm_plot, newpage = FALSE)
       grid::popViewport()
       
-      # Movement plot (right) with expected movement
+      # Movement plot (right, large)
+      grid::grid.text("Pitch Movement (Batter's View)", x = 0.72, y = 0.87, gp = grid::gpar(fontsize = 11, fontface = "bold", col = "#006F71"))
       exp_grid <- build_expected_movement_grid(tm_data)
       mvmt_plot <- create_pitcher_movement_plot(tm_data, pitcher_name, exp_grid)
-      grid::pushViewport(grid::viewport(x = 0.72, y = 0.69, width = 0.50, height = 0.23, just = c("center", "center")))
+      grid::pushViewport(grid::viewport(x = 0.72, y = 0.72, width = 0.50, height = 0.28, just = c("center", "center")))
       print(mvmt_plot, newpage = FALSE)
       grid::popViewport()
       
-      # Count usage chart (full width, middle)
+      # === COUNT USAGE (simplified, compact) ===
       grid::grid.text("Pitch Usage by Count", x = 0.5, y = 0.545, gp = grid::gpar(fontsize = 10, fontface = "bold", col = "#006F71"))
       count_plot <- create_count_usage_chart(tm_data, pitcher_name)
-      grid::pushViewport(grid::viewport(x = 0.5, y = 0.43, width = 0.95, height = 0.20, just = c("center", "center")))
+      grid::pushViewport(grid::viewport(x = 0.5, y = 0.46, width = 0.95, height = 0.15, just = c("center", "center")))
       print(count_plot, newpage = FALSE)
       grid::popViewport()
       
-      # Heatmaps section header
-      grid::grid.text("Location Heatmaps", x = 0.5, y = 0.31, gp = grid::gpar(fontsize = 10, fontface = "bold", col = "#006F71"))
+      # === HEATMAPS BY PITCH GROUP (FB, BB, OS) AND BATTER HAND ===
+      grid::grid.text("Location Heatmaps by Pitch Group", x = 0.5, y = 0.36, gp = grid::gpar(fontsize = 10, fontface = "bold", col = "#006F71"))
       
-      # vs LHH heatmaps
-      grid::grid.text("vs LHH - All", x = 0.15, y = 0.275, gp = grid::gpar(fontsize = 8, fontface = "bold"))
-      hm_lhh_all <- create_pitcher_heatmap(tm_data, pitcher_name, NULL, "Left", "all")
-      grid::pushViewport(grid::viewport(x = 0.15, y = 0.19, width = 0.18, height = 0.15, just = c("center", "center")))
-      print(hm_lhh_all, newpage = FALSE)
+      # Row headers
+      grid::grid.text("vs LHH", x = 0.08, y = 0.26, just = "left", gp = grid::gpar(fontsize = 8, fontface = "bold"))
+      grid::grid.text("vs RHH", x = 0.08, y = 0.13, just = "left", gp = grid::gpar(fontsize = 8, fontface = "bold"))
+      
+      # Column headers with colors
+      grid::grid.text("FB", x = 0.27, y = 0.335, gp = grid::gpar(fontsize = 8, fontface = "bold", col = "#1f77b4"))
+      grid::grid.text("BB", x = 0.50, y = 0.335, gp = grid::gpar(fontsize = 8, fontface = "bold", col = "#9370DB"))
+      grid::grid.text("OS", x = 0.73, y = 0.335, gp = grid::gpar(fontsize = 8, fontface = "bold", col = "#2E8B57"))
+      
+      # LHH row - FB, BB, OS
+      hm_lhh_fb <- create_pitcher_heatmap(tm_data, pitcher_name, "FB", "Left", "all")
+      grid::pushViewport(grid::viewport(x = 0.27, y = 0.26, width = 0.20, height = 0.13, just = c("center", "center")))
+      print(hm_lhh_fb, newpage = FALSE)
       grid::popViewport()
       
-      grid::grid.text("vs LHH - Whiffs", x = 0.38, y = 0.275, gp = grid::gpar(fontsize = 8, fontface = "bold"))
-      hm_lhh_whiff <- create_pitcher_heatmap(tm_data, pitcher_name, NULL, "Left", "Whiffs")
-      grid::pushViewport(grid::viewport(x = 0.38, y = 0.19, width = 0.18, height = 0.15, just = c("center", "center")))
-      print(hm_lhh_whiff, newpage = FALSE)
+      hm_lhh_bb <- create_pitcher_heatmap(tm_data, pitcher_name, "BB", "Left", "all")
+      grid::pushViewport(grid::viewport(x = 0.50, y = 0.26, width = 0.20, height = 0.13, just = c("center", "center")))
+      print(hm_lhh_bb, newpage = FALSE)
       grid::popViewport()
       
-      # vs RHH heatmaps
-      grid::grid.text("vs RHH - All", x = 0.62, y = 0.275, gp = grid::gpar(fontsize = 8, fontface = "bold"))
-      hm_rhh_all <- create_pitcher_heatmap(tm_data, pitcher_name, NULL, "Right", "all")
-      grid::pushViewport(grid::viewport(x = 0.62, y = 0.19, width = 0.18, height = 0.15, just = c("center", "center")))
-      print(hm_rhh_all, newpage = FALSE)
+      hm_lhh_os <- create_pitcher_heatmap(tm_data, pitcher_name, "OS", "Left", "all")
+      grid::pushViewport(grid::viewport(x = 0.73, y = 0.26, width = 0.20, height = 0.13, just = c("center", "center")))
+      print(hm_lhh_os, newpage = FALSE)
       grid::popViewport()
       
-      grid::grid.text("vs RHH - Whiffs", x = 0.85, y = 0.275, gp = grid::gpar(fontsize = 8, fontface = "bold"))
-      hm_rhh_whiff <- create_pitcher_heatmap(tm_data, pitcher_name, NULL, "Right", "Whiffs")
-      grid::pushViewport(grid::viewport(x = 0.85, y = 0.19, width = 0.18, height = 0.15, just = c("center", "center")))
-      print(hm_rhh_whiff, newpage = FALSE)
+      # RHH row - FB, BB, OS
+      hm_rhh_fb <- create_pitcher_heatmap(tm_data, pitcher_name, "FB", "Right", "all")
+      grid::pushViewport(grid::viewport(x = 0.27, y = 0.13, width = 0.20, height = 0.13, just = c("center", "center")))
+      print(hm_rhh_fb, newpage = FALSE)
       grid::popViewport()
       
-      # Whiff movement chart at bottom
-      grid::grid.text("Whiff Movement Profile", x = 0.5, y = 0.095, gp = grid::gpar(fontsize = 10, fontface = "bold", col = "#006F71"))
-      whiff_plot <- create_pitcher_whiff_movement(tm_data, pitcher_name)
-      grid::pushViewport(grid::viewport(x = 0.5, y = 0.035, width = 0.75, height = 0.10, just = c("center", "center")))
-      print(whiff_plot, newpage = FALSE)
+      hm_rhh_bb <- create_pitcher_heatmap(tm_data, pitcher_name, "BB", "Right", "all")
+      grid::pushViewport(grid::viewport(x = 0.50, y = 0.13, width = 0.20, height = 0.13, just = c("center", "center")))
+      print(hm_rhh_bb, newpage = FALSE)
+      grid::popViewport()
+      
+      hm_rhh_os <- create_pitcher_heatmap(tm_data, pitcher_name, "OS", "Right", "all")
+      grid::pushViewport(grid::viewport(x = 0.73, y = 0.13, width = 0.20, height = 0.13, just = c("center", "center")))
+      print(hm_rhh_os, newpage = FALSE)
       grid::popViewport()
       
       # Footer
       grid::grid.text(format(Sys.Date(), "%B %d, %Y"), x = 0.95, y = 0.01, just = "right",
                       gp = grid::gpar(cex = 0.5, col = "gray50"))
-      grid::grid.text("Generated by Advanced Scouting App", x = 0.05, y = 0.01, just = "left",
+      grid::grid.text(input$pitcher_report_title, x = 0.05, y = 0.01, just = "left",
                       gp = grid::gpar(cex = 0.5, col = "gray50"))
       
       dev.off()
