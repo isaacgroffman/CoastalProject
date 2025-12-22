@@ -8,6 +8,7 @@ library(shiny)
 library(gt)
 library(gtExtras)
 library(bslib)
+library(webshot2)  # For gtsave PNG export
 
 # ============================================================
 # 1. LOAD DATA AND CALCULATE GRADES LIVE
@@ -3409,88 +3410,92 @@ ui <- fluidPage(
   ),
   
   div(class = "app-header",
-      span(class = "header-title", "Matchup Explorer - Scouting Cards")
+      span(class = "header-title", "Matchup Explorer - Scouting Tools")
   ),
   
-  sidebarLayout(
-    sidebarPanel(
-      width = 3,
-      
-      h4("Scouting Cards", style = "color: #006F71; margin-bottom: 15px;"),
-      
-      selectizeInput(
-        "scouting_hitters",
-        "Select Hitters",
-        choices = all_hitters,
-        selected = all_hitters[1:min(3, length(all_hitters))],
-        multiple = TRUE,
-        options = list(maxItems = 12, placeholder = "Choose hitters...")
-      ),
-      
-      hr(),
-      
-      h5("PDF Export", style = "color: #006F71;"),
-      textInput("pdf_title", "Report Title", value = "Opponent Scouting Report"),
-      textInput("pdf_subtitle", "Subtitle", value = ""),
-      fileInput("pdf_logo", "Upload Logo", accept = c("image/png", "image/jpeg")),
-      downloadButton("download_pdf", "Download PDF", class = "btn-primary btn-sm w-100"),
-      
-      hr(),
-      
-      h5("Legend", style = "color: #006F71;"),
-      div(style = "font-size: 12px;",
-          p(tags$span(style = "color: #FA8072; font-weight: bold;", "FB"), " Fastball/Sinker"),
-          p(tags$span(style = "color: #A020F0; font-weight: bold;", "BB"), " Breaking Balls"),
-          p(tags$span(style = "color: #2E8B57; font-weight: bold;", "OS"), " Offspeed")
-      ),
-      
-      hr(),
-      
-      h5("Confidence (Border)", style = "color: #006F71;"),
-      div(style = "font-size: 12px;",
-          p(tags$span(style = "border: 2px solid #1A9850; padding: 2px 6px; border-radius: 4px;", "High"), " n ≥ 80"),
-          p(tags$span(style = "border: 2px solid #FDB863; padding: 2px 6px; border-radius: 4px;", "Med"), " 30-80"),
-          p(tags$span(style = "border: 2px solid #D73027; padding: 2px 6px; border-radius: 4px;", "Low"), " n < 30")
-      ),
-      
-      hr(),
-      
-      h5("Other Tools", style = "color: #006F71;"),
-      selectizeInput(
-        "pitcher_choices",
-        "Pitchers (Matrix)",
-        choices = all_pitchers,
-        selected = all_pitchers[1:min(5, length(all_pitchers))],
-        multiple = TRUE,
-        options = list(maxItems = 10)
-      ),
-      selectizeInput(
-        "hitter_choices",
-        "Hitters (Matrix)",
-        choices = all_hitters,
-        selected = all_hitters[1:min(8, length(all_hitters))],
-        multiple = TRUE,
-        options = list(maxItems = 15)
+  # No sidebar - all tabs are self-contained
+  tabsetPanel(
+    id = "tabs",
+    type = "pills",
+    
+    # Tab 1: Hitter Cards (Compact - 9 per page)
+    tabPanel(
+      "Hitter Cards",
+      div(style = "margin-top: 15px; padding: 15px;",
+          
+          # Controls Row
+          div(style = "background: #fff3e0; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ffcc80;",
+              fluidRow(
+                column(6,
+                       selectizeInput("hitter_cards_select", "Select Hitters (up to 9 per page)",
+                                      choices = all_hitters,
+                                      selected = all_hitters[1:min(9, length(all_hitters))],
+                                      multiple = TRUE,
+                                      options = list(maxItems = 18, placeholder = "Choose hitters..."))
+                ),
+                column(3,
+                       textInput("hitter_cards_title", "Report Title", value = "Game Day Cards")
+                ),
+                column(3,
+                       div(style = "padding-top: 25px;",
+                           downloadButton("download_hitter_cards_pdf", "Download Cards PDF", class = "btn-primary"))
+                )
+              )
+          ),
+          
+          # Legend row
+          div(style = "font-size: 11px; margin-bottom: 10px; display: flex; gap: 20px; flex-wrap: wrap;",
+              span(style = "color: #1f77b4; font-weight: bold;", "FB"), " Fastball | ",
+              span(style = "color: #9370DB; font-weight: bold;", "BB"), " Breaking | ",
+              span(style = "color: #2E8B57; font-weight: bold;", "OS"), " Offspeed | ",
+              span(style = "border: 2px solid #1A9850; padding: 1px 4px; border-radius: 3px; font-size: 9px;", "Green"), " Good matchup | ",
+              span(style = "border: 2px solid #D73027; padding: 1px 4px; border-radius: 3px; font-size: 9px;", "Red"), " Tough matchup"
+          ),
+          
+          # Cards output
+          div(style = "overflow-x: auto;",
+              uiOutput("hitter_cards_ui"))
       )
     ),
     
-    mainPanel(
-      width = 9,
-      tabsetPanel(
-        id = "tabs",
-        
-        # Tab 1: Scouting Cards
-        tabPanel(
-          "Scouting Cards",
-          div(style = "margin-top: 15px;",
-              div(style = "overflow-x: auto; overflow-y: auto; max-height: 900px;",
-                  uiOutput("scouting_cards_ui"))
-          )
-        ),
-        
-        # Tab 2: Matchup Matrix (MAC-Style)
-        tabPanel(
-          "Matchup Matrix",
+    # Tab 2: Hitter Reports (Full page per hitter)
+    tabPanel(
+      "Hitter Reports",
+      div(style = "margin-top: 15px; padding: 15px;",
+          
+          # Controls Row
+          div(style = "background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #90caf9;",
+              fluidRow(
+                column(5,
+                       selectizeInput("hitter_reports_select", "Select Hitters",
+                                      choices = all_hitters,
+                                      selected = all_hitters[1:min(3, length(all_hitters))],
+                                      multiple = TRUE,
+                                      options = list(maxItems = 15, placeholder = "Choose hitters..."))
+                ),
+                column(3,
+                       textInput("hitter_reports_title", "Report Title", value = "Opponent Scouting Report")
+                ),
+                column(2,
+                       div(style = "padding-top: 25px;",
+                           downloadButton("download_hitter_reports_pdf", "Download Reports PDF", class = "btn-primary"))
+                ),
+                column(2,
+                       div(style = "padding-top: 25px;",
+                           actionButton("preview_hitter_report", "Preview Selected", class = "btn-info"))
+                )
+              )
+          ),
+          
+          # Report preview
+          div(style = "background: white; padding: 20px; border-radius: 8px; border: 1px solid #ddd;",
+              uiOutput("hitter_reports_preview"))
+      )
+    ),
+    
+    # Tab 3: Matchup Matrix (MAC-Style)
+    tabPanel(
+      "Matchup Matrix",
           div(style = "margin-top: 15px;",
               
               # Pitching Staff Inputs
@@ -3531,7 +3536,7 @@ ui <- fluidPage(
               
               # Options row
               fluidRow(
-                column(6,
+                column(4,
                        radioButtons(
                          "matrix_color_perspective",
                          "Color Perspective",
@@ -3541,10 +3546,14 @@ ui <- fluidPage(
                          inline = TRUE
                        )
                 ),
-                column(6,
+                column(4,
                        div(style = "padding-top: 5px;",
                            checkboxInput("matrix_show_rv", "Show RV/100 instead of score", value = FALSE)
                        )
+                ),
+                column(4,
+                       div(style = "padding-top: 5px;",
+                           downloadButton("download_matrix_png", "Download Matrix PNG", class = "btn-success btn-sm"))
                 )
               ),
               
@@ -3554,8 +3563,10 @@ ui <- fluidPage(
                   uiOutput("matrix_legend_text")
               ),
               
-              # Matrix table
-              gt_output("matchup_matrix_table"),
+              # Matrix table  
+              div(id = "matrix_container",
+                  gt_output("matchup_matrix_table")
+              ),
               
               hr(),
               
@@ -3790,7 +3801,6 @@ ui <- fluidPage(
           )
         )
       )
-    )
   )
 )
 
@@ -4625,6 +4635,551 @@ server <- function(input, output, session) {
   })
   
   # --------------------------------------------------------
+  # HITTER CARDS TAB (Compact - 9 per page)
+  # --------------------------------------------------------
+  
+  output$hitter_cards_ui <- renderUI({
+    req(input$hitter_cards_select)
+    
+    hitters <- input$hitter_cards_select
+    
+    # Create compact card for each hitter - 2 rows: info + notes
+    card_list <- lapply(hitters, function(h_name) {
+      profile <- get_scouting_profile(h_name)
+      if (is.null(profile)) return(NULL)
+      
+      rv <- profile$rv_per_100
+      if (is.na(rv) || is.null(rv)) rv <- 0
+      
+      # Border color based on run value
+      border_color <- if (rv >= 1.5) "#D73027" else if (rv >= 0.5) "#FC8D59" else if (rv >= -0.5) "#F5F5F5" else if (rv >= -1.5) "#91CF60" else "#1A9850"
+      
+      punishes_text <- if (length(profile$punishes) > 0) paste(profile$punishes, collapse = ", ") else "—"
+      struggles_text <- if (length(profile$struggles) > 0) paste(profile$struggles, collapse = ", ") else "—"
+      
+      # Count insights text
+      count_text <- if (length(profile$count_insights) > 0) profile$count_insights[1] else ""
+      pitch_rec <- if (length(profile$pitch_count_recs) > 0) {
+        paste(unlist(profile$pitch_count_recs), collapse = " | ")
+      } else ""
+      
+      safe_name <- gsub("[^A-Za-z0-9]", "", h_name)
+      
+      # Compact 2-row card
+      div(
+        style = paste0("border: 2px solid ", border_color, "; border-radius: 4px; margin-bottom: 4px; padding: 4px; background: #fafafa; font-size: 9px;"),
+        
+        # ROW 1: Info row
+        div(
+          style = "display: grid; grid-template-columns: 120px 1fr 150px 100px; gap: 6px; align-items: center; padding-bottom: 3px; border-bottom: 1px solid #ddd;",
+          
+          # Name + Hand + RV
+          div(
+            div(style = "font-weight: bold; font-size: 11px;", paste0(profile$name, " (", profile$hand, ")")),
+            div(style = "font-size: 8px; color: #666;", paste0("n=", profile$n, " | RV: ", sprintf("%+.2f", rv)))
+          ),
+          
+          # Key stats row
+          div(
+            style = "display: flex; gap: 4px; flex-wrap: wrap;",
+            span(style = "background: #f0f0f0; padding: 1px 3px; border-radius: 2px;", paste0("K:", round(profile$raw_stats_overall$k_pct, 0), "%")),
+            span(style = "background: #f0f0f0; padding: 1px 3px; border-radius: 2px;", paste0("BB:", round(profile$raw_stats_overall$bb_pct, 0), "%")),
+            span(style = "background: #f0f0f0; padding: 1px 3px; border-radius: 2px;", paste0("Whiff:", round(profile$raw_stats_overall$whiff, 0), "%")),
+            span(style = "background: #f0f0f0; padding: 1px 3px; border-radius: 2px;", paste0("Chase:", round(profile$raw_stats_overall$chase, 0), "%")),
+            span(style = "background: #f0f0f0; padding: 1px 3px; border-radius: 2px;", paste0("2KCh:", round(profile$raw_stats_overall$chase_2k, 0), "%")),
+            # Grades
+            span(style = paste0("background: ", grade_color(profile$rhp_power), "; padding: 1px 3px; border-radius: 2px; font-weight: bold;"), paste0("vR:", profile$rhp_power)),
+            span(style = paste0("background: ", grade_color(profile$lhp_power), "; padding: 1px 3px; border-radius: 2px; font-weight: bold;"), paste0("vL:", profile$lhp_power))
+          ),
+          
+          # Punish/Struggle
+          div(
+            div(style = "font-size: 8px;", 
+                span(style = "color: #1A9850; font-weight: bold;", "✓"), " ", punishes_text),
+            div(style = "font-size: 8px;", 
+                span(style = "color: #D73027; font-weight: bold;", "✗"), " ", struggles_text)
+          ),
+          
+          # Count insight
+          div(style = "font-size: 7px; color: #006F71; font-style: italic;",
+              if (count_text != "") count_text else if (pitch_rec != "") pitch_rec else "—"
+          )
+        ),
+        
+        # ROW 2: In-game notes row
+        div(
+          style = "display: grid; grid-template-columns: 80px repeat(5, 1fr) 120px; gap: 4px; margin-top: 3px; align-items: start;",
+          
+          # Quick notes
+          div(
+            div(style = "font-size: 7px; font-weight: bold; color: #006F71;", "Quick Notes:"),
+            tags$textarea(style = "width: 100%; height: 28px; font-size: 7px; border: 1px solid #ccc; border-radius: 2px; padding: 2px; resize: none;", placeholder = "...")
+          ),
+          
+          # AB boxes 1-5
+          lapply(1:5, function(i) {
+            div(style = "text-align: center;",
+                div(style = "font-size: 8px; font-weight: bold;", i),
+                div(style = "border: 1px solid #aaa; height: 26px; border-radius: 2px; background: white;")
+            )
+          }),
+          
+          # Pitch plan mini
+          div(
+            div(style = "font-size: 7px; font-weight: bold; color: #006F71;", "Pitch Plan:"),
+            tags$textarea(style = "width: 100%; height: 28px; font-size: 7px; border: 1px solid #ccc; border-radius: 2px; padding: 2px; resize: none;", placeholder = "FB early, BB late...")
+          )
+        )
+      )
+    })
+    
+    do.call(tagList, card_list)
+  })
+  
+  # Hitter Cards PDF Download
+  output$download_hitter_cards_pdf <- downloadHandler(
+    filename = function() {
+      paste0("Hitter_Cards_", format(Sys.Date(), "%Y%m%d"), ".pdf")
+    },
+    content = function(file) {
+      hitters <- input$hitter_cards_select
+      if (is.null(hitters) || length(hitters) == 0) {
+        showNotification("Please select at least one hitter", type = "error")
+        return(NULL)
+      }
+      
+      if (length(dev.list()) > 0) try(dev.off(), silent = TRUE)
+      
+      # Portrait letter - fit 9 hitters per page
+      pdf(file, width = 8.5, height = 11, paper = "letter")
+      
+      hitters_per_page <- 9
+      n_pages <- ceiling(length(hitters) / hitters_per_page)
+      
+      for (page in 1:n_pages) {
+        grid::grid.newpage()
+        
+        # Header
+        grid::grid.rect(x = 0.5, y = 0.98, width = 1, height = 0.04, just = c("center", "top"),
+                        gp = grid::gpar(fill = "#006F71", col = NA))
+        grid::grid.text(input$hitter_cards_title, x = 0.5, y = 0.965,
+                        gp = grid::gpar(fontsize = 14, fontface = "bold", col = "white"))
+        grid::grid.text(paste0("Page ", page, " of ", n_pages), x = 0.95, y = 0.965, just = "right",
+                        gp = grid::gpar(fontsize = 8, col = "white"))
+        
+        # Get hitters for this page
+        start_idx <- (page - 1) * hitters_per_page + 1
+        end_idx <- min(page * hitters_per_page, length(hitters))
+        page_hitters <- hitters[start_idx:end_idx]
+        
+        # Draw each hitter card
+        card_height <- 0.10  # Height per card
+        y_start <- 0.92
+        
+        for (i in seq_along(page_hitters)) {
+          h_name <- page_hitters[i]
+          profile <- get_scouting_profile(h_name)
+          if (is.null(profile)) next
+          
+          y_pos <- y_start - (i - 1) * card_height
+          rv <- if (!is.na(profile$rv_per_100)) profile$rv_per_100 else 0
+          
+          # Border color
+          border_col <- if (rv >= 1.5) "#D73027" else if (rv >= 0.5) "#FC8D59" else if (rv >= -0.5) "#CCCCCC" else if (rv >= -1.5) "#91CF60" else "#1A9850"
+          
+          # Card background
+          grid::grid.rect(x = 0.5, y = y_pos, width = 0.96, height = card_height - 0.005,
+                          just = c("center", "top"),
+                          gp = grid::gpar(fill = "#fafafa", col = border_col, lwd = 2))
+          
+          # Row 1: Info
+          info_y <- y_pos - 0.015
+          grid::grid.text(paste0(profile$name, " (", profile$hand, ")"), x = 0.04, y = info_y,
+                          just = "left", gp = grid::gpar(fontsize = 10, fontface = "bold"))
+          grid::grid.text(paste0("n=", profile$n, " | RV:", sprintf("%+.2f", rv)), x = 0.04, y = info_y - 0.015,
+                          just = "left", gp = grid::gpar(fontsize = 7, col = "gray40"))
+          
+          # Stats
+          stats_text <- paste0("K:", round(profile$raw_stats_overall$k_pct, 0), "% | ",
+                               "BB:", round(profile$raw_stats_overall$bb_pct, 0), "% | ",
+                               "Whiff:", round(profile$raw_stats_overall$whiff, 0), "% | ",
+                               "Chase:", round(profile$raw_stats_overall$chase, 0), "% | ",
+                               "vR:", profile$rhp_power, " vL:", profile$lhp_power)
+          grid::grid.text(stats_text, x = 0.35, y = info_y, just = "left",
+                          gp = grid::gpar(fontsize = 8))
+          
+          # Punish/Struggle
+          punishes_text <- if (length(profile$punishes) > 0) paste(profile$punishes, collapse = ", ") else "—"
+          struggles_text <- if (length(profile$struggles) > 0) paste(profile$struggles, collapse = ", ") else "—"
+          grid::grid.text(paste0("✓ ", punishes_text), x = 0.75, y = info_y, just = "left",
+                          gp = grid::gpar(fontsize = 7, col = "#1A9850"))
+          grid::grid.text(paste0("✗ ", struggles_text), x = 0.75, y = info_y - 0.012, just = "left",
+                          gp = grid::gpar(fontsize = 7, col = "#D73027"))
+          
+          # Row 2: Note boxes
+          notes_y <- y_pos - 0.055
+          grid::grid.text("Notes:", x = 0.04, y = notes_y, just = "left",
+                          gp = grid::gpar(fontsize = 7, col = "#006F71", fontface = "bold"))
+          
+          # AB boxes
+          for (ab in 1:5) {
+            box_x <- 0.15 + (ab - 1) * 0.12
+            grid::grid.rect(x = box_x, y = notes_y - 0.01, width = 0.10, height = 0.025,
+                            just = c("center", "center"),
+                            gp = grid::gpar(fill = "white", col = "gray60", lwd = 0.5))
+            grid::grid.text(ab, x = box_x, y = notes_y + 0.012, 
+                            gp = grid::gpar(fontsize = 8, fontface = "bold"))
+          }
+          
+          # Pitch plan box
+          grid::grid.rect(x = 0.85, y = notes_y - 0.01, width = 0.22, height = 0.025,
+                          just = c("center", "center"),
+                          gp = grid::gpar(fill = "white", col = "gray60", lwd = 0.5))
+          grid::grid.text("Pitch Plan", x = 0.85, y = notes_y + 0.012,
+                          gp = grid::gpar(fontsize = 7, col = "#006F71"))
+        }
+        
+        # Footer
+        grid::grid.text(format(Sys.Date(), "%B %d, %Y"), x = 0.95, y = 0.01, just = "right",
+                        gp = grid::gpar(cex = 0.5, col = "gray50"))
+      }
+      
+      dev.off()
+      showNotification("Hitter Cards PDF generated!", type = "message")
+    }
+  )
+  
+  # --------------------------------------------------------
+  # HITTER REPORTS TAB (Full page per hitter)
+  # --------------------------------------------------------
+  
+  output$hitter_reports_preview <- renderUI({
+    # Show first selected hitter as preview or message
+    hitters <- input$hitter_reports_select
+    
+    if (is.null(hitters) || length(hitters) == 0) {
+      return(div(style = "text-align: center; padding: 40px; color: #666;",
+                 h4("Select hitters to preview their reports"),
+                 p("Each hitter will get a full-page detailed report")))
+    }
+    
+    # Preview first hitter
+    h_name <- hitters[1]
+    profile <- get_scouting_profile(h_name)
+    
+    if (is.null(profile)) {
+      return(div(style = "text-align: center; padding: 40px; color: #666;",
+                 h4("No data available for selected hitter")))
+    }
+    
+    rv <- if (!is.na(profile$rv_per_100)) profile$rv_per_100 else 0
+    border_color <- if (rv >= 1.5) "#D73027" else if (rv >= 0.5) "#FC8D59" else if (rv >= -0.5) "#888" else if (rv >= -1.5) "#91CF60" else "#1A9850"
+    
+    safe_name <- gsub("[^A-Za-z0-9]", "", h_name)
+    
+    div(style = paste0("border: 3px solid ", border_color, "; border-radius: 8px; padding: 15px; max-width: 850px; margin: 0 auto;"),
+        
+        # Header
+        div(style = "background: linear-gradient(135deg, #006F71, #00897b); padding: 15px; border-radius: 6px; margin-bottom: 15px;",
+            h2(style = "color: white; margin: 0; text-align: center;", paste0(profile$name, " (", profile$hand, ")")),
+            p(style = "color: white; text-align: center; margin: 5px 0;",
+              paste0("Sample: ", profile$n, " pitches | RV/100: ", sprintf("%+.2f", rv)))
+        ),
+        
+        # Stats overview
+        div(style = "background: #f5f5f5; padding: 10px; border-radius: 6px; margin-bottom: 15px;",
+            h5("Overall Stats", style = "color: #006F71; margin: 0 0 10px 0;"),
+            div(style = "display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; text-align: center;",
+                div(div(style = "font-weight: bold; font-size: 18px;", paste0(round(profile$raw_stats_overall$k_pct, 1), "%")), div(style = "font-size: 10px; color: #666;", "K%")),
+                div(div(style = "font-weight: bold; font-size: 18px;", paste0(round(profile$raw_stats_overall$bb_pct, 1), "%")), div(style = "font-size: 10px; color: #666;", "BB%")),
+                div(div(style = "font-weight: bold; font-size: 18px;", paste0(round(profile$raw_stats_overall$whiff, 1), "%")), div(style = "font-size: 10px; color: #666;", "Whiff%")),
+                div(div(style = "font-weight: bold; font-size: 18px;", paste0(round(profile$raw_stats_overall$chase, 1), "%")), div(style = "font-size: 10px; color: #666;", "Chase%")),
+                div(div(style = "font-weight: bold; font-size: 18px;", if(!is.na(profile$raw_stats_overall$ev)) round(profile$raw_stats_overall$ev, 1) else "-"), div(style = "font-size: 10px; color: #666;", "EV")),
+                div(div(style = "font-weight: bold; font-size: 18px;", paste0(round(profile$raw_stats_overall$chase_2k, 1), "%")), div(style = "font-size: 10px; color: #666;", "2K Chase%"))
+            )
+        ),
+        
+        # Grades
+        fluidRow(
+          column(6,
+                 div(style = "background: #fff3e0; padding: 10px; border-radius: 6px;",
+                     h6("vs RHP Grades", style = "color: #e65100; margin: 0 0 8px 0;"),
+                     div(style = "display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; text-align: center;",
+                         div(div(style = paste0("background: ", grade_color(profile$rhp_raw_power), "; padding: 5px; border-radius: 4px; font-weight: bold;"), profile$rhp_raw_power), div(style = "font-size: 8px;", "Raw")),
+                         div(div(style = paste0("background: ", grade_color(profile$rhp_power), "; padding: 5px; border-radius: 4px; font-weight: bold;"), profile$rhp_power), div(style = "font-size: 8px;", "Game")),
+                         div(div(style = paste0("background: ", grade_color(profile$rhp_contact), "; padding: 5px; border-radius: 4px; font-weight: bold;"), profile$rhp_contact), div(style = "font-size: 8px;", "Con")),
+                         div(div(style = paste0("background: ", grade_color(profile$rhp_avoid_k), "; padding: 5px; border-radius: 4px; font-weight: bold;"), profile$rhp_avoid_k), div(style = "font-size: 8px;", "AvK")),
+                         div(div(style = paste0("background: ", grade_color(profile$rhp_swing_dec), "; padding: 5px; border-radius: 4px; font-weight: bold;"), profile$rhp_swing_dec), div(style = "font-size: 8px;", "Dec"))
+                     )
+                 )
+          ),
+          column(6,
+                 div(style = "background: #e8f5e9; padding: 10px; border-radius: 6px;",
+                     h6("vs LHP Grades", style = "color: #2e7d32; margin: 0 0 8px 0;"),
+                     div(style = "display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; text-align: center;",
+                         div(div(style = paste0("background: ", grade_color(profile$lhp_raw_power), "; padding: 5px; border-radius: 4px; font-weight: bold;"), profile$lhp_raw_power), div(style = "font-size: 8px;", "Raw")),
+                         div(div(style = paste0("background: ", grade_color(profile$lhp_power), "; padding: 5px; border-radius: 4px; font-weight: bold;"), profile$lhp_power), div(style = "font-size: 8px;", "Game")),
+                         div(div(style = paste0("background: ", grade_color(profile$lhp_contact), "; padding: 5px; border-radius: 4px; font-weight: bold;"), profile$lhp_contact), div(style = "font-size: 8px;", "Con")),
+                         div(div(style = paste0("background: ", grade_color(profile$lhp_avoid_k), "; padding: 5px; border-radius: 4px; font-weight: bold;"), profile$lhp_avoid_k), div(style = "font-size: 8px;", "AvK")),
+                         div(div(style = paste0("background: ", grade_color(profile$lhp_swing_dec), "; padding: 5px; border-radius: 4px; font-weight: bold;"), profile$lhp_swing_dec), div(style = "font-size: 8px;", "Dec"))
+                     )
+                 )
+          )
+        ),
+        
+        # Punish/Struggle + Count Insights
+        fluidRow(style = "margin-top: 15px;",
+          column(6,
+                 div(style = "background: #f0f8ff; padding: 10px; border-radius: 6px; height: 100%;",
+                     h6("Strengths & Weaknesses", style = "color: #006F71; margin: 0 0 8px 0;"),
+                     div(style = "color: #1A9850; font-weight: bold;", "Punishes: ", 
+                         if(length(profile$punishes) > 0) paste(profile$punishes, collapse = ", ") else "—"),
+                     div(style = "color: #D73027; font-weight: bold; margin-top: 5px;", "Struggles: ", 
+                         if(length(profile$struggles) > 0) paste(profile$struggles, collapse = ", ") else "—")
+                 )
+          ),
+          column(6,
+                 div(style = "background: #f0f8ff; padding: 10px; border-radius: 6px; height: 100%;",
+                     h6("Count Analysis", style = "color: #006F71; margin: 0 0 8px 0;"),
+                     if (length(profile$count_insights) > 0) {
+                       lapply(profile$count_insights, function(x) div(style = "font-size: 11px;", paste0("• ", x)))
+                     } else div("No count insights available"),
+                     if (length(profile$pitch_count_recs) > 0) {
+                       div(style = "margin-top: 5px; font-weight: bold; font-size: 10px;",
+                           lapply(names(profile$pitch_count_recs), function(fam) {
+                             div(paste0("→ ", profile$pitch_count_recs[[fam]]))
+                           })
+                       )
+                     }
+                 )
+          )
+        ),
+        
+        # Count stats
+        if (!is.null(profile$count_stats)) {
+          div(style = "margin-top: 15px;",
+              h6("Performance by Count", style = "color: #006F71;"),
+              div(style = "display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; text-align: center;",
+                  div(style = "background: #e3f2fd; padding: 8px; border-radius: 4px;",
+                      div(style = "font-size: 9px; color: #666;", "Early (0-1 K)"),
+                      div(style = "font-weight: bold;", if(!is.null(profile$count_stats$early$rv100)) sprintf("%+.1f", profile$count_stats$early$rv100) else "-")),
+                  div(style = "background: #e8f5e9; padding: 8px; border-radius: 4px;",
+                      div(style = "font-size: 9px; color: #666;", "Pitcher Ahead"),
+                      div(style = "font-weight: bold;", if(!is.null(profile$count_stats$ahead$rv100)) sprintf("%+.1f", profile$count_stats$ahead$rv100) else "-")),
+                  div(style = "background: #fff3e0; padding: 8px; border-radius: 4px;",
+                      div(style = "font-size: 9px; color: #666;", "Hitter Ahead"),
+                      div(style = "font-weight: bold;", if(!is.null(profile$count_stats$behind$rv100)) sprintf("%+.1f", profile$count_stats$behind$rv100) else "-")),
+                  div(style = "background: #fce4ec; padding: 8px; border-radius: 4px;",
+                      div(style = "font-size: 9px; color: #666;", "Two Strike"),
+                      div(style = "font-weight: bold;", if(!is.null(profile$count_stats$two_strike$rv100)) sprintf("%+.1f", profile$count_stats$two_strike$rv100) else "-")),
+                  div(style = "background: #f3e5f5; padding: 8px; border-radius: 4px;",
+                      div(style = "font-size: 9px; color: #666;", "2K Whiff%"),
+                      div(style = "font-weight: bold;", if(!is.null(profile$count_stats$two_strike$whiff)) sprintf("%.0f%%", profile$count_stats$two_strike$whiff) else "-"))
+              )
+          )
+        },
+        
+        # Notes section
+        div(style = "margin-top: 20px; border-top: 2px solid #006F71; padding-top: 15px;",
+            h5("Scouting Notes", style = "color: #006F71;"),
+            fluidRow(
+              column(4,
+                     div(style = "font-weight: bold; font-size: 10px; margin-bottom: 5px;", "Overall Approach"),
+                     tags$textarea(style = "width: 100%; height: 80px; font-size: 10px; border: 1px solid #ddd; border-radius: 4px; padding: 5px;", 
+                                   placeholder = "General approach notes...")
+              ),
+              column(4,
+                     div(style = "font-weight: bold; font-size: 10px; margin-bottom: 5px;", "vs RHP Plan"),
+                     tags$textarea(style = "width: 100%; height: 80px; font-size: 10px; border: 1px solid #ddd; border-radius: 4px; padding: 5px;", 
+                                   placeholder = "Pitch plan vs RHP...")
+              ),
+              column(4,
+                     div(style = "font-weight: bold; font-size: 10px; margin-bottom: 5px;", "vs LHP Plan"),
+                     tags$textarea(style = "width: 100%; height: 80px; font-size: 10px; border: 1px solid #ddd; border-radius: 4px; padding: 5px;", 
+                                   placeholder = "Pitch plan vs LHP...")
+              )
+            )
+        ),
+        
+        # In-game notes
+        div(style = "margin-top: 15px;",
+            h6("In-Game Notes", style = "color: #006F71;"),
+            div(style = "display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;",
+                lapply(1:5, function(i) {
+                  div(style = "text-align: center;",
+                      div(style = "font-weight: bold; font-size: 14px;", i),
+                      div(style = "border: 1px solid #aaa; height: 60px; border-radius: 4px; margin-top: 5px; background: white;")
+                  )
+                })
+            )
+        ),
+        
+        # Footer
+        div(style = "margin-top: 15px; text-align: center; color: #666; font-size: 10px;",
+            paste0("Report generated: ", format(Sys.Date(), "%B %d, %Y"), " | ", length(hitters), " hitter(s) selected")
+        )
+    )
+  })
+  
+  # Hitter Reports PDF Download
+  output$download_hitter_reports_pdf <- downloadHandler(
+    filename = function() {
+      paste0("Hitter_Reports_", format(Sys.Date(), "%Y%m%d"), ".pdf")
+    },
+    content = function(file) {
+      hitters <- input$hitter_reports_select
+      if (is.null(hitters) || length(hitters) == 0) {
+        showNotification("Please select at least one hitter", type = "error")
+        return(NULL)
+      }
+      
+      if (length(dev.list()) > 0) try(dev.off(), silent = TRUE)
+      
+      # Portrait letter - one page per hitter
+      pdf(file, width = 8.5, height = 11, paper = "letter")
+      
+      for (h_name in hitters) {
+        profile <- get_scouting_profile(h_name)
+        if (is.null(profile)) next
+        
+        grid::grid.newpage()
+        
+        rv <- if (!is.na(profile$rv_per_100)) profile$rv_per_100 else 0
+        border_col <- if (rv >= 1.5) "#D73027" else if (rv >= 0.5) "#FC8D59" else if (rv >= -0.5) "#888888" else if (rv >= -1.5) "#91CF60" else "#1A9850"
+        
+        # Header
+        grid::grid.rect(x = 0.5, y = 0.97, width = 0.96, height = 0.06, just = c("center", "top"),
+                        gp = grid::gpar(fill = "#006F71", col = border_col, lwd = 4))
+        grid::grid.text(paste0(profile$name, " (", profile$hand, ")"), x = 0.5, y = 0.945,
+                        gp = grid::gpar(fontsize = 20, fontface = "bold", col = "white"))
+        grid::grid.text(paste0("n=", profile$n, " | RV/100: ", sprintf("%+.2f", rv)), x = 0.5, y = 0.92,
+                        gp = grid::gpar(fontsize = 10, col = "white"))
+        
+        # Stats row
+        stats_y <- 0.87
+        stats <- c(
+          paste0("K%: ", round(profile$raw_stats_overall$k_pct, 1), "%"),
+          paste0("BB%: ", round(profile$raw_stats_overall$bb_pct, 1), "%"),
+          paste0("Whiff%: ", round(profile$raw_stats_overall$whiff, 1), "%"),
+          paste0("Chase%: ", round(profile$raw_stats_overall$chase, 1), "%"),
+          paste0("EV: ", if(!is.na(profile$raw_stats_overall$ev)) round(profile$raw_stats_overall$ev, 1) else "-"),
+          paste0("2KCh%: ", round(profile$raw_stats_overall$chase_2k, 1), "%")
+        )
+        for (i in seq_along(stats)) {
+          x_pos <- 0.08 + (i - 1) * 0.15
+          grid::grid.text(stats[i], x = x_pos, y = stats_y, just = "left",
+                          gp = grid::gpar(fontsize = 9))
+        }
+        
+        # Grades section
+        grid::grid.text("vs RHP Grades:", x = 0.05, y = 0.82, just = "left",
+                        gp = grid::gpar(fontsize = 10, fontface = "bold", col = "#e65100"))
+        grades_rhp <- c(profile$rhp_raw_power, profile$rhp_power, profile$rhp_contact, profile$rhp_avoid_k, profile$rhp_swing_dec)
+        grades_labels <- c("Raw", "Game", "Con", "AvK", "Dec")
+        for (i in seq_along(grades_rhp)) {
+          x_pos <- 0.22 + (i - 1) * 0.08
+          grid::grid.rect(x = x_pos, y = 0.82, width = 0.06, height = 0.025, just = c("center", "center"),
+                          gp = grid::gpar(fill = grade_color(grades_rhp[i]), col = NA))
+          grid::grid.text(grades_rhp[i], x = x_pos, y = 0.82, gp = grid::gpar(fontsize = 9, fontface = "bold"))
+          grid::grid.text(grades_labels[i], x = x_pos, y = 0.795, gp = grid::gpar(fontsize = 7))
+        }
+        
+        grid::grid.text("vs LHP Grades:", x = 0.55, y = 0.82, just = "left",
+                        gp = grid::gpar(fontsize = 10, fontface = "bold", col = "#2e7d32"))
+        grades_lhp <- c(profile$lhp_raw_power, profile$lhp_power, profile$lhp_contact, profile$lhp_avoid_k, profile$lhp_swing_dec)
+        for (i in seq_along(grades_lhp)) {
+          x_pos <- 0.72 + (i - 1) * 0.08
+          grid::grid.rect(x = x_pos, y = 0.82, width = 0.06, height = 0.025, just = c("center", "center"),
+                          gp = grid::gpar(fill = grade_color(grades_lhp[i]), col = NA))
+          grid::grid.text(grades_lhp[i], x = x_pos, y = 0.82, gp = grid::gpar(fontsize = 9, fontface = "bold"))
+          grid::grid.text(grades_labels[i], x = x_pos, y = 0.795, gp = grid::gpar(fontsize = 7))
+        }
+        
+        # Punish/Struggle
+        punishes_text <- if (length(profile$punishes) > 0) paste(profile$punishes, collapse = ", ") else "—"
+        struggles_text <- if (length(profile$struggles) > 0) paste(profile$struggles, collapse = ", ") else "—"
+        grid::grid.text(paste0("Punishes: ", punishes_text), x = 0.05, y = 0.75, just = "left",
+                        gp = grid::gpar(fontsize = 10, col = "#1A9850", fontface = "bold"))
+        grid::grid.text(paste0("Struggles: ", struggles_text), x = 0.05, y = 0.73, just = "left",
+                        gp = grid::gpar(fontsize = 10, col = "#D73027", fontface = "bold"))
+        
+        # Count insights
+        if (length(profile$count_insights) > 0) {
+          grid::grid.text("Count Analysis:", x = 0.55, y = 0.75, just = "left",
+                          gp = grid::gpar(fontsize = 10, fontface = "bold", col = "#006F71"))
+          for (i in seq_along(profile$count_insights)) {
+            grid::grid.text(paste0("• ", profile$count_insights[i]), x = 0.55, y = 0.75 - i * 0.02, just = "left",
+                            gp = grid::gpar(fontsize = 8))
+          }
+        }
+        
+        # Count stats boxes
+        grid::grid.text("Performance by Count:", x = 0.05, y = 0.65, just = "left",
+                        gp = grid::gpar(fontsize = 10, fontface = "bold", col = "#006F71"))
+        count_labels <- c("Early", "P-Ahead", "H-Ahead", "2-Strike", "2K Whiff%")
+        count_vals <- c(
+          if(!is.null(profile$count_stats$early$rv100)) sprintf("%+.1f", profile$count_stats$early$rv100) else "-",
+          if(!is.null(profile$count_stats$ahead$rv100)) sprintf("%+.1f", profile$count_stats$ahead$rv100) else "-",
+          if(!is.null(profile$count_stats$behind$rv100)) sprintf("%+.1f", profile$count_stats$behind$rv100) else "-",
+          if(!is.null(profile$count_stats$two_strike$rv100)) sprintf("%+.1f", profile$count_stats$two_strike$rv100) else "-",
+          if(!is.null(profile$count_stats$two_strike$whiff)) sprintf("%.0f%%", profile$count_stats$two_strike$whiff) else "-"
+        )
+        for (i in seq_along(count_labels)) {
+          x_pos <- 0.08 + (i - 1) * 0.18
+          grid::grid.rect(x = x_pos, y = 0.60, width = 0.15, height = 0.04, just = c("center", "center"),
+                          gp = grid::gpar(fill = "#f0f0f0", col = "#ddd"))
+          grid::grid.text(count_vals[i], x = x_pos, y = 0.605, gp = grid::gpar(fontsize = 12, fontface = "bold"))
+          grid::grid.text(count_labels[i], x = x_pos, y = 0.585, gp = grid::gpar(fontsize = 7, col = "gray40"))
+        }
+        
+        # Notes section (big area for writing)
+        grid::grid.text("Scouting Notes", x = 0.05, y = 0.52, just = "left",
+                        gp = grid::gpar(fontsize = 12, fontface = "bold", col = "#006F71"))
+        
+        # Three note boxes
+        note_width <- 0.30
+        note_y <- 0.40
+        note_height <- 0.12
+        
+        grid::grid.text("Overall", x = 0.05 + note_width/2, y = 0.49, gp = grid::gpar(fontsize = 9, fontface = "bold"))
+        grid::grid.rect(x = 0.05 + note_width/2, y = note_y, width = note_width, height = note_height, 
+                        just = c("center", "center"), gp = grid::gpar(fill = "white", col = "#ccc"))
+        
+        grid::grid.text("vs RHP Plan", x = 0.37 + note_width/2, y = 0.49, gp = grid::gpar(fontsize = 9, fontface = "bold"))
+        grid::grid.rect(x = 0.37 + note_width/2, y = note_y, width = note_width, height = note_height, 
+                        just = c("center", "center"), gp = grid::gpar(fill = "white", col = "#ccc"))
+        
+        grid::grid.text("vs LHP Plan", x = 0.69 + note_width/2, y = 0.49, gp = grid::gpar(fontsize = 9, fontface = "bold"))
+        grid::grid.rect(x = 0.69 + note_width/2, y = note_y, width = note_width, height = note_height, 
+                        just = c("center", "center"), gp = grid::gpar(fill = "white", col = "#ccc"))
+        
+        # In-game notes section (BIG boxes)
+        grid::grid.text("In-Game Notes", x = 0.05, y = 0.28, just = "left",
+                        gp = grid::gpar(fontsize = 12, fontface = "bold", col = "#006F71"))
+        
+        ab_y <- 0.15
+        ab_height <- 0.12
+        ab_width <- 0.17
+        for (ab in 1:5) {
+          x_pos <- 0.05 + (ab - 1) * 0.19
+          grid::grid.text(ab, x = x_pos + ab_width/2, y = 0.25, gp = grid::gpar(fontsize = 14, fontface = "bold"))
+          grid::grid.rect(x = x_pos + ab_width/2, y = ab_y, width = ab_width, height = ab_height, 
+                          just = c("center", "center"), gp = grid::gpar(fill = "white", col = "#aaa"))
+        }
+        
+        # Footer
+        grid::grid.text(format(Sys.Date(), "%B %d, %Y"), x = 0.95, y = 0.02, just = "right",
+                        gp = grid::gpar(cex = 0.6, col = "gray50"))
+        grid::grid.text(input$hitter_reports_title, x = 0.05, y = 0.02, just = "left",
+                        gp = grid::gpar(cex = 0.6, col = "gray50"))
+      }
+      
+      dev.off()
+      showNotification("Hitter Reports PDF generated!", type = "message")
+    }
+  )
+  
+  # --------------------------------------------------------
   # MATCHUP MATRIX TAB
   # --------------------------------------------------------
   
@@ -4873,6 +5428,137 @@ server <- function(input, output, session) {
         subtitle = md(subtitle_text)
       )
   })
+  
+  # Matchup Matrix PNG Download
+  output$download_matrix_png <- downloadHandler(
+    filename = function() {
+      paste0("Matchup_Matrix_", format(Sys.Date(), "%Y%m%d"), ".png")
+    },
+    content = function(file) {
+      df <- matchup_df()
+      if (nrow(df) == 0) {
+        showNotification("Please set up the matchup matrix first", type = "error")
+        return(NULL)
+      }
+      
+      perspective <- input$matrix_color_perspective
+      show_rv <- input$matrix_show_rv
+      if (is.null(perspective)) perspective <- "hitter"
+      if (is.null(show_rv)) show_rv <- FALSE
+      
+      lineup <- input$matrix_lineup
+      bench <- input$matrix_bench
+      sp <- input$matrix_sp
+      rp <- input$matrix_rp
+      
+      rp_positions <- if (!is.null(rp) && length(rp) > 0) setNames(seq_along(rp), rp) else character(0)
+      lineup_positions <- if (!is.null(lineup) && length(lineup) > 0) setNames(seq_along(lineup), lineup) else character(0)
+      bench_positions <- if (!is.null(bench) && length(bench) > 0) setNames(seq_along(bench), bench) else character(0)
+      sp_pitcher <- if (!is.null(sp) && length(sp) > 0 && sp != "") sp else ""
+      
+      df <- df %>%
+        left_join(pitcher_hands, by = "Pitcher") %>%
+        left_join(hitter_hands, by = c("Hitter" = "Batter")) %>%
+        mutate(
+          PitcherRole = case_when(
+            sp_pitcher != "" & Pitcher == sp_pitcher ~ "SP",
+            Pitcher %in% names(rp_positions) ~ paste0("RP", match(Pitcher, names(rp_positions))),
+            TRUE ~ ""
+          ),
+          PitcherLabel = paste0(ifelse(PitcherRole != "", paste0(PitcherRole, ": "), ""), Pitcher, " (", substr(PitcherThrows, 1, 1), ")"),
+          HitterPos = case_when(
+            Hitter %in% names(lineup_positions) ~ as.character(match(Hitter, names(lineup_positions))),
+            Hitter %in% names(bench_positions) ~ "BE",
+            TRUE ~ ""
+          ),
+          HitterLabel = paste0(ifelse(HitterPos != "", paste0(HitterPos, ". "), ""), Hitter, " (", substr(BatterSide, 1, 1), ")"),
+          hitter_order = case_when(
+            Hitter %in% names(lineup_positions) ~ match(Hitter, names(lineup_positions)),
+            Hitter %in% names(bench_positions) ~ 10L + match(Hitter, names(bench_positions)),
+            TRUE ~ 99L
+          ),
+          pitcher_order = case_when(
+            sp_pitcher != "" & Pitcher == sp_pitcher ~ 1L,
+            Pitcher %in% names(rp_positions) ~ 1L + match(Pitcher, names(rp_positions)),
+            TRUE ~ 99L
+          )
+        )
+      
+      if (show_rv) {
+        df <- df %>% mutate(display_value = rv100)
+      } else {
+        df <- df %>% mutate(display_value = score)
+      }
+      
+      matrix_df <- df %>%
+        arrange(hitter_order) %>%
+        select(HitterLabel, PitcherLabel, display_value, pitcher_order) %>%
+        arrange(pitcher_order) %>%
+        select(-pitcher_order) %>%
+        pivot_wider(names_from = PitcherLabel, values_from = display_value, values_fill = NA)
+      
+      pitcher_order_df <- df %>% select(PitcherLabel, pitcher_order) %>% distinct() %>% arrange(pitcher_order)
+      pitcher_cols <- pitcher_order_df$PitcherLabel
+      pitcher_cols <- pitcher_cols[pitcher_cols %in% names(matrix_df)]
+      matrix_df <- matrix_df %>% select(HitterLabel, all_of(pitcher_cols))
+      
+      # Build GT table for export
+      if (show_rv) {
+        gt_table <- matrix_df %>%
+          gt(rowname_col = "HitterLabel") %>%
+          data_color(
+            columns = all_of(pitcher_cols),
+            fn = scales::col_numeric(
+              palette = c("#D73027", "#FC8D59", "#FEE08B", "#FFFFBF", "#D9EF8B", "#91CF60", "#1A9850"),
+              domain = c(-3, 3), na.color = "grey90"
+            )
+          ) %>%
+          fmt_number(columns = all_of(pitcher_cols), decimals = 2, force_sign = TRUE)
+      } else if (perspective == "hitter") {
+        gt_table <- matrix_df %>%
+          gt(rowname_col = "HitterLabel") %>%
+          data_color(
+            columns = all_of(pitcher_cols),
+            fn = scales::col_numeric(
+              palette = c("#1A9850", "#91CF60", "#D9EF8B", "#FFFFBF", "#FEE08B", "#FC8D59", "#D73027"),
+              domain = c(0, 100), na.color = "grey90"
+            )
+          )
+      } else {
+        gt_table <- matrix_df %>%
+          gt(rowname_col = "HitterLabel") %>%
+          data_color(
+            columns = all_of(pitcher_cols),
+            fn = scales::col_numeric(
+              palette = c("#D73027", "#FC8D59", "#FEE08B", "#FFFFBF", "#D9EF8B", "#91CF60", "#1A9850"),
+              domain = c(0, 100), na.color = "grey90"
+            )
+          )
+      }
+      
+      subtitle_text <- if (show_rv) {
+        "RV/100 (batter perspective)"
+      } else if (perspective == "hitter") {
+        "Green = Hitter Advantage | Red = Pitcher Advantage"
+      } else {
+        "Red = Hitter Advantage | Green = Pitcher Advantage"
+      }
+      
+      gt_table <- gt_table %>%
+        tab_stubhead(label = "Batter") %>%
+        tab_spanner(label = "Pitchers", columns = all_of(pitcher_cols)) %>%
+        cols_align(align = "center", columns = everything()) %>%
+        tab_style(style = cell_text(weight = "bold", size = px(11)), locations = cells_stub()) %>%
+        tab_style(style = cell_text(weight = "bold", size = px(10)), locations = cells_column_labels()) %>%
+        tab_style(style = cell_text(size = px(13), weight = "bold"), locations = cells_body()) %>%
+        tab_options(table.font.size = px(11), data_row.padding = px(6)) %>%
+        tab_header(title = md("**MAC Matchup Matrix**"), subtitle = subtitle_text)
+      
+      # Save as PNG using gtsave
+      gtsave(gt_table, file)
+      showNotification("Matchup Matrix PNG saved!", type = "message")
+    }
+  )
   
   # Detailed breakdown for selected matchup
   output$matrix_detail_ui <- renderUI({
