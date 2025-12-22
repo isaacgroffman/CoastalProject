@@ -1709,9 +1709,18 @@ create_usage_pie <- function(usage, border_color = "gray50") {
 
 # Create mini spray chart for scouting cards
 create_mini_spray <- function(tm_data, batter_name, filter_type = "all", filter_value = NULL) {
+  # Base empty plot
+  empty_plot <- ggplot() + theme_void() + 
+    annotate("text", x = 0, y = 150, label = "No Data", size = 2, color = "gray50") +
+    coord_fixed(xlim = c(-280, 280), ylim = c(-30, 350))
+  
   if (is.null(tm_data)) {
-    return(ggplot() + theme_void() + 
-             annotate("text", x = 0, y = 0, label = "No Data", size = 2, color = "gray50"))
+    return(empty_plot)
+  }
+  
+  # Handle NULL/NA filter_type
+  if (is.null(filter_type) || is.na(filter_type)) {
+    filter_type <- "all"
   }
   
   # Filter data
@@ -1719,10 +1728,10 @@ create_mini_spray <- function(tm_data, batter_name, filter_type = "all", filter_
     filter(Batter == batter_name, PitchCall == "InPlay",
            !is.na(Distance), !is.na(Bearing))
   
-  # Apply filter based on type
-  if (filter_type == "hand" && !is.null(filter_value)) {
+  # Apply filter based on type (with explicit TRUE/FALSE checks)
+  if (!is.null(filter_type) && !is.na(filter_type) && filter_type == "hand" && !is.null(filter_value)) {
     chart_data <- chart_data %>% filter(PitcherThrows == filter_value)
-  } else if (filter_type == "strikes" && !is.null(filter_value)) {
+  } else if (!is.null(filter_type) && !is.na(filter_type) && filter_type == "strikes" && !is.null(filter_value)) {
     if (filter_value == "0-1") {
       chart_data <- chart_data %>% filter(Strikes %in% c(0, 1))
     } else if (filter_value == "2") {
@@ -1733,7 +1742,8 @@ create_mini_spray <- function(tm_data, batter_name, filter_type = "all", filter_
   if (nrow(chart_data) < 3) {
     return(ggplot() + theme_void() + 
              annotate("text", x = 0, y = 150, label = paste0("n=", nrow(chart_data)), 
-                      size = 2, color = "gray50"))
+                      size = 2, color = "gray50") +
+             coord_fixed(xlim = c(-280, 280), ylim = c(-30, 350)))
   }
   
   # Calculate spray coordinates
@@ -4904,9 +4914,9 @@ server <- function(input, output, session) {
           # Punish/Struggle (compact)
           punishes_text <- if (length(profile$punishes) > 0) substr(paste(profile$punishes, collapse = ","), 1, 25) else "-"
           struggles_text <- if (length(profile$struggles) > 0) substr(paste(profile$struggles, collapse = ","), 1, 25) else "-"
-          grid::grid.text(paste0("✓", punishes_text), x = 0.68, y = info_y, just = "left",
+          grid::grid.text(paste0("+", punishes_text), x = 0.68, y = info_y, just = "left",
                           gp = grid::gpar(fontsize = 5, col = "#1A9850"))
-          grid::grid.text(paste0("✗", struggles_text), x = 0.68, y = info_y - 0.012, just = "left",
+          grid::grid.text(paste0("-", struggles_text), x = 0.68, y = info_y - 0.012, just = "left",
                           gp = grid::gpar(fontsize = 5, col = "#D73027"))
           
           # === ROW 2: IN-GAME NOTES (emphasized!) ===
@@ -5211,7 +5221,44 @@ server <- function(input, output, session) {
             )
         ),
         
-        # === ROW 6: Pitch Plan Notes ===
+        # === ROW 6: Movement Charts (red=whiff, green=hard hit) ===
+        div(style = "background: #e3f2fd; padding: 8px; border-radius: 4px; margin-bottom: 10px;",
+            div(style = "font-size: 10px; font-weight: bold; color: #006F71; margin-bottom: 6px;", "Pitch Movement (red=whiff, green=95+EV)"),
+            div(style = "display: grid; grid-template-columns: 1fr 1fr; gap: 8px;",
+                # vs RHP movement charts
+                div(
+                    div(style = "font-size: 9px; font-weight: bold; color: #e65100; margin-bottom: 4px;", "vs RHP"),
+                    div(style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;",
+                        div(style = "text-align: center;",
+                            div(style = "font-size: 8px; color: #1f77b4; font-weight: bold;", "FB"),
+                            plotOutput(paste0("report_mvmt_rhp_fb_", safe_name), height = "100px")),
+                        div(style = "text-align: center;",
+                            div(style = "font-size: 8px; color: #9370DB; font-weight: bold;", "BB"),
+                            plotOutput(paste0("report_mvmt_rhp_bb_", safe_name), height = "100px")),
+                        div(style = "text-align: center;",
+                            div(style = "font-size: 8px; color: #2E8B57; font-weight: bold;", "OS"),
+                            plotOutput(paste0("report_mvmt_rhp_os_", safe_name), height = "100px"))
+                    )
+                ),
+                # vs LHP movement charts
+                div(
+                    div(style = "font-size: 9px; font-weight: bold; color: #2e7d32; margin-bottom: 4px;", "vs LHP"),
+                    div(style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;",
+                        div(style = "text-align: center;",
+                            div(style = "font-size: 8px; color: #1f77b4; font-weight: bold;", "FB"),
+                            plotOutput(paste0("report_mvmt_lhp_fb_", safe_name), height = "100px")),
+                        div(style = "text-align: center;",
+                            div(style = "font-size: 8px; color: #9370DB; font-weight: bold;", "BB"),
+                            plotOutput(paste0("report_mvmt_lhp_bb_", safe_name), height = "100px")),
+                        div(style = "text-align: center;",
+                            div(style = "font-size: 8px; color: #2E8B57; font-weight: bold;", "OS"),
+                            plotOutput(paste0("report_mvmt_lhp_os_", safe_name), height = "100px"))
+                    )
+                )
+            )
+        ),
+        
+        # === ROW 7: Pitch Plan Notes ===
         div(style = "border-top: 2px solid #006F71; padding-top: 10px;",
             div(style = "font-size: 11px; font-weight: bold; color: #006F71; margin-bottom: 6px;", "Pitch Plan"),
             div(style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;",
@@ -5249,92 +5296,109 @@ server <- function(input, output, session) {
     safe_name <- gsub("[^A-Za-z0-9]", "", h_name)
     profile <- get_scouting_profile(h_name)
     
-    # Velo RV output
+    # Velo RV output - access via pitch_group_stats (same structure as Scouting Cards)
     output[[paste0("velo_rv_preview_", safe_name)]] <- renderUI({
       if (is.null(profile)) return(NULL)
+      pgs <- profile$pitch_group_stats
+      if (is.null(pgs)) return(span(style = "color: #888; font-size: 8px;", "Velo RV: No data"))
+      
       lines <- list()
-      # Hard FB
-      if (!is.null(profile$key_splits[["HardFB"]])) {
-        rv <- profile$key_splits[["HardFB"]]$rv100
+      
+      # FB velo splits (FB 92+ Hard, FB<88 Soft)
+      fb_rhp <- pgs[["RHP_FB"]]
+      if (!is.null(fb_rhp) && !is.null(fb_rhp$key_splits[["Hard"]])) {
+        rv <- fb_rhp$key_splits[["Hard"]]$rv100
         color <- if (rv >= 1) "#1A9850" else if (rv <= -1) "#D73027" else "#666"
-        lines <- c(lines, list(span(style = paste0("color: ", color, "; font-size: 8px; margin-right: 8px;"), paste0("FB95+:", sprintf("%+.1f", rv)))))
+        lines <- c(lines, list(span(style = paste0("color: ", color, "; font-size: 8px; margin-right: 8px;"), paste0("FB92+:", sprintf("%+.1f", rv)))))
       }
-      if (!is.null(profile$key_splits[["SoftFB"]])) {
-        rv <- profile$key_splits[["SoftFB"]]$rv100
+      if (!is.null(fb_rhp) && !is.null(fb_rhp$key_splits[["Soft"]])) {
+        rv <- fb_rhp$key_splits[["Soft"]]$rv100
         color <- if (rv >= 1) "#1A9850" else if (rv <= -1) "#D73027" else "#666"
         lines <- c(lines, list(span(style = paste0("color: ", color, "; font-size: 8px; margin-right: 8px;"), paste0("FB<88:", sprintf("%+.1f", rv)))))
       }
-      if (!is.null(profile$key_splits[["HardOS"]])) {
-        rv <- profile$key_splits[["HardOS"]]$rv100
+      
+      # BB velo splits (BB 84+ HardBB, BB<76 SoftBB)
+      bb_rhp <- pgs[["RHP_BB"]]
+      if (!is.null(bb_rhp) && !is.null(bb_rhp$key_splits[["HardBB"]])) {
+        rv <- bb_rhp$key_splits[["HardBB"]]$rv100
+        color <- if (rv >= 1) "#1A9850" else if (rv <= -1) "#D73027" else "#666"
+        lines <- c(lines, list(span(style = paste0("color: ", color, "; font-size: 8px; margin-right: 8px;"), paste0("BB84+:", sprintf("%+.1f", rv)))))
+      }
+      
+      # OS velo splits (OS 84+ HardOS)
+      os_rhp <- pgs[["RHP_OS"]]
+      if (!is.null(os_rhp) && !is.null(os_rhp$key_splits[["HardOS"]])) {
+        rv <- os_rhp$key_splits[["HardOS"]]$rv100
         color <- if (rv >= 1) "#1A9850" else if (rv <= -1) "#D73027" else "#666"
         lines <- c(lines, list(span(style = paste0("color: ", color, "; font-size: 8px; margin-right: 8px;"), paste0("OS84+:", sprintf("%+.1f", rv)))))
       }
+      
       if (length(lines) == 0) return(span(style = "color: #888; font-size: 8px;", "Velo RV: Low n"))
       div(style = "font-size: 8px; font-weight: bold; color: #006F71;", "Velo RV/100: ", lines)
     })
     
-    # Spray charts
+    # Spray charts - CORRECT parameter order: (tm_data, batter_name, filter_type, filter_value)
     output[[paste0("report_spray_rhp_", safe_name)]] <- renderPlot({
-      create_mini_spray(tm_data, h_name, "Right")
+      create_mini_spray(tm_data, h_name, "hand", "Right")
     }, bg = "transparent")
     output[[paste0("report_spray_lhp_", safe_name)]] <- renderPlot({
-      create_mini_spray(tm_data, h_name, "Left")
+      create_mini_spray(tm_data, h_name, "hand", "Left")
     }, bg = "transparent")
     output[[paste0("report_spray_01k_", safe_name)]] <- renderPlot({
-      create_mini_spray(tm_data, h_name, NULL, "early")
+      create_mini_spray(tm_data, h_name, "strikes", "0-1")
     }, bg = "transparent")
     output[[paste0("report_spray_2k_", safe_name)]] <- renderPlot({
-      create_mini_spray(tm_data, h_name, NULL, "2k")
+      create_mini_spray(tm_data, h_name, "strikes", "2")
     }, bg = "transparent")
     
-    # Pie charts - RHP
+    # Pie charts - RHP (correct field names: rec_rhp_overall, rec_rhp_1p, rec_rhp_putaway)
     output[[paste0("report_pie_rhp_usage_", safe_name)]] <- renderPlot({
       if (is.null(profile)) return(NULL)
       create_usage_pie(profile$rec_rhp_overall)
     }, bg = "transparent")
     output[[paste0("report_pie_rhp_1p_", safe_name)]] <- renderPlot({
       if (is.null(profile)) return(NULL)
-      create_usage_pie(profile$rec_rhp_first_pitch)
+      create_usage_pie(profile$rec_rhp_1p)
     }, bg = "transparent")
     output[[paste0("report_pie_rhp_2k_", safe_name)]] <- renderPlot({
       if (is.null(profile)) return(NULL)
       create_usage_pie(profile$rec_rhp_putaway)
     }, bg = "transparent")
     
-    # Pie charts - LHP
+    # Pie charts - LHP (correct field names: rec_lhp_overall, rec_lhp_1p, rec_lhp_putaway)
     output[[paste0("report_pie_lhp_usage_", safe_name)]] <- renderPlot({
       if (is.null(profile)) return(NULL)
       create_usage_pie(profile$rec_lhp_overall)
     }, bg = "transparent")
     output[[paste0("report_pie_lhp_1p_", safe_name)]] <- renderPlot({
       if (is.null(profile)) return(NULL)
-      create_usage_pie(profile$rec_lhp_first_pitch)
+      create_usage_pie(profile$rec_lhp_1p)
     }, bg = "transparent")
     output[[paste0("report_pie_lhp_2k_", safe_name)]] <- renderPlot({
       if (is.null(profile)) return(NULL)
       create_usage_pie(profile$rec_lhp_putaway)
     }, bg = "transparent")
     
-    # Heatmaps - RHP
+    # Heatmaps - RHP (use "Whiff" metric - blue=whiff zones)
     output[[paste0("report_hm_rhp_fb_", safe_name)]] <- renderPlot({
-      create_metric_heatmap(tm_data, h_name, "FB", "Right", metric = "Whiff_pct")
+      create_metric_heatmap(tm_data, h_name, "FB", "Right", metric = "Whiff")
     }, bg = "transparent")
     output[[paste0("report_hm_rhp_bb_", safe_name)]] <- renderPlot({
-      create_metric_heatmap(tm_data, h_name, "BB", "Right", metric = "Whiff_pct")
+      create_metric_heatmap(tm_data, h_name, "BB", "Right", metric = "Whiff")
     }, bg = "transparent")
     output[[paste0("report_hm_rhp_os_", safe_name)]] <- renderPlot({
-      create_metric_heatmap(tm_data, h_name, "OS", "Right", metric = "Whiff_pct")
+      create_metric_heatmap(tm_data, h_name, "OS", "Right", metric = "Whiff")
     }, bg = "transparent")
     
-    # Heatmaps - LHP
+    # Heatmaps - LHP (use "Whiff" metric - blue=whiff zones)
     output[[paste0("report_hm_lhp_fb_", safe_name)]] <- renderPlot({
-      create_metric_heatmap(tm_data, h_name, "FB", "Left", metric = "Whiff_pct")
+      create_metric_heatmap(tm_data, h_name, "FB", "Left", metric = "Whiff")
     }, bg = "transparent")
     output[[paste0("report_hm_lhp_bb_", safe_name)]] <- renderPlot({
-      create_metric_heatmap(tm_data, h_name, "BB", "Left", metric = "Whiff_pct")
+      create_metric_heatmap(tm_data, h_name, "BB", "Left", metric = "Whiff")
     }, bg = "transparent")
     output[[paste0("report_hm_lhp_os_", safe_name)]] <- renderPlot({
-      create_metric_heatmap(tm_data, h_name, "OS", "Left", metric = "Whiff_pct")
+      create_metric_heatmap(tm_data, h_name, "OS", "Left", metric = "Whiff")
     }, bg = "transparent")
     
     # Hit/Out location charts
@@ -5349,6 +5413,28 @@ server <- function(input, output, session) {
     }, bg = "transparent")
     output[[paste0("report_hitout_2k_outs_", safe_name)]] <- renderPlot({
       create_hit_out_chart(tm_data, h_name, "2k_outs")
+    }, bg = "transparent")
+    
+    # Movement charts - vs RHP
+    output[[paste0("report_mvmt_rhp_fb_", safe_name)]] <- renderPlot({
+      create_movement_plot(tm_data, h_name, "Right", "FB")
+    }, bg = "transparent")
+    output[[paste0("report_mvmt_rhp_bb_", safe_name)]] <- renderPlot({
+      create_movement_plot(tm_data, h_name, "Right", "BB")
+    }, bg = "transparent")
+    output[[paste0("report_mvmt_rhp_os_", safe_name)]] <- renderPlot({
+      create_movement_plot(tm_data, h_name, "Right", "OS")
+    }, bg = "transparent")
+    
+    # Movement charts - vs LHP
+    output[[paste0("report_mvmt_lhp_fb_", safe_name)]] <- renderPlot({
+      create_movement_plot(tm_data, h_name, "Left", "FB")
+    }, bg = "transparent")
+    output[[paste0("report_mvmt_lhp_bb_", safe_name)]] <- renderPlot({
+      create_movement_plot(tm_data, h_name, "Left", "BB")
+    }, bg = "transparent")
+    output[[paste0("report_mvmt_lhp_os_", safe_name)]] <- renderPlot({
+      create_movement_plot(tm_data, h_name, "Left", "OS")
     }, bg = "transparent")
   })
   
@@ -5414,8 +5500,8 @@ server <- function(input, output, session) {
         
         # === ROW 1: Grades + Punish/Struggle + Count Stats ===
         # Punish/Struggle
-        punishes_text <- if (length(profile$punishes) > 0) paste(profile$punishes, collapse = ", ") else "—"
-        struggles_text <- if (length(profile$struggles) > 0) paste(profile$struggles, collapse = ", ") else "—"
+        punishes_text <- if (length(profile$punishes) > 0) paste(profile$punishes, collapse = ", ") else "-"
+        struggles_text <- if (length(profile$struggles) > 0) paste(profile$struggles, collapse = ", ") else "-"
         grid::grid.text(paste0("Punish: ", punishes_text), x = 0.04, y = 0.91, just = "left",
                         gp = grid::gpar(fontsize = 8, col = "#1A9850", fontface = "bold"))
         grid::grid.text(paste0("Struggle: ", struggles_text), x = 0.04, y = 0.895, just = "left",
@@ -5464,7 +5550,7 @@ server <- function(input, output, session) {
         if (length(profile$count_insights) > 0) {
           grid::grid.text("Count Insights:", x = 0.72, y = 0.91, just = "left", gp = grid::gpar(fontsize = 8, fontface = "bold", col = "#006F71"))
           for (i in seq_along(profile$count_insights[1:min(3, length(profile$count_insights))])) {
-            grid::grid.text(paste0("• ", profile$count_insights[i]), x = 0.72, y = 0.895 - (i-1) * 0.015, just = "left",
+            grid::grid.text(paste0("- ", profile$count_insights[i]), x = 0.72, y = 0.895 - (i-1) * 0.015, just = "left",
                             gp = grid::gpar(fontsize = 6))
           }
         }
@@ -5479,10 +5565,10 @@ server <- function(input, output, session) {
           vp <- grid::viewport(x = x_pos, y = spray_y, width = 0.20, height = 0.10, just = c("center", "center"))
           grid::pushViewport(vp)
           spray_plot <- tryCatch({
-            if (i == 1) create_mini_spray(tm_data, h_name, "Right")
-            else if (i == 2) create_mini_spray(tm_data, h_name, "Left")
-            else if (i == 3) create_mini_spray(tm_data, h_name, NULL, "early")
-            else create_mini_spray(tm_data, h_name, NULL, "2k")
+            if (i == 1) create_mini_spray(tm_data, h_name, "hand", "Right")
+            else if (i == 2) create_mini_spray(tm_data, h_name, "hand", "Left")
+            else if (i == 3) create_mini_spray(tm_data, h_name, "strikes", "0-1")
+            else create_mini_spray(tm_data, h_name, "strikes", "2")
           }, error = function(e) NULL)
           if (!is.null(spray_plot)) print(spray_plot, newpage = FALSE)
           grid::popViewport()
@@ -5500,7 +5586,7 @@ server <- function(input, output, session) {
           x_pos <- 0.08 + (j - 1) * 0.10
           vp <- grid::viewport(x = x_pos, y = pie_y, width = 0.08, height = 0.08, just = c("center", "center"))
           grid::pushViewport(vp)
-          pie_data <- switch(j, profile$rec_rhp_overall, profile$rec_rhp_first_pitch, profile$rec_rhp_putaway)
+          pie_data <- switch(j, profile$rec_rhp_overall, profile$rec_rhp_1p, profile$rec_rhp_putaway)
           p <- tryCatch(create_usage_pie(pie_data), error = function(e) NULL)
           if (!is.null(p)) print(p, newpage = FALSE)
           grid::popViewport()
@@ -5518,7 +5604,7 @@ server <- function(input, output, session) {
           grid::pushViewport(vp)
           hm_plot <- tryCatch({
             pitch_grp <- c("FB", "BB", "OS")[j]
-            create_metric_heatmap(tm_data, h_name, pitch_grp, "Right", metric = "Whiff_pct")
+            create_metric_heatmap(tm_data, h_name, pitch_grp, "Right", metric = "Whiff")
           }, error = function(e) NULL)
           if (!is.null(hm_plot)) print(hm_plot, newpage = FALSE)
           grid::popViewport()
@@ -5535,7 +5621,7 @@ server <- function(input, output, session) {
           x_pos <- 0.08 + (j - 1) * 0.10
           vp <- grid::viewport(x = x_pos, y = pie_y, width = 0.08, height = 0.08, just = c("center", "center"))
           grid::pushViewport(vp)
-          pie_data <- switch(j, profile$rec_lhp_overall, profile$rec_lhp_first_pitch, profile$rec_lhp_putaway)
+          pie_data <- switch(j, profile$rec_lhp_overall, profile$rec_lhp_1p, profile$rec_lhp_putaway)
           p <- tryCatch(create_usage_pie(pie_data), error = function(e) NULL)
           if (!is.null(p)) print(p, newpage = FALSE)
           grid::popViewport()
@@ -5551,7 +5637,7 @@ server <- function(input, output, session) {
           grid::pushViewport(vp)
           hm_plot <- tryCatch({
             pitch_grp <- c("FB", "BB", "OS")[j]
-            create_metric_heatmap(tm_data, h_name, pitch_grp, "Left", metric = "Whiff_pct")
+            create_metric_heatmap(tm_data, h_name, pitch_grp, "Left", metric = "Whiff")
           }, error = function(e) NULL)
           if (!is.null(hm_plot)) print(hm_plot, newpage = FALSE)
           grid::popViewport()
