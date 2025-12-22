@@ -1714,6 +1714,11 @@ create_mini_spray <- function(tm_data, batter_name, filter_type = "all", filter_
              annotate("text", x = 0, y = 0, label = "No Data", size = 2, color = "gray50"))
   }
   
+  # Handle null/NA filter_type
+  if (is.null(filter_type) || is.na(filter_type)) {
+    filter_type <- "all"
+  }
+  
   # Filter data
   chart_data <- tm_data %>%
     filter(Batter == batter_name, PitchCall == "InPlay",
@@ -4729,24 +4734,41 @@ server <- function(input, output, session) {
             )
           ),
           
-          # Key Stats (compact)
+          # Key Stats (compact) - matching Scouting Cards format
           div(
-            style = "display: flex; gap: 3px; flex-wrap: wrap; font-size: 9px;",
-            span(style = paste0("background: ", stat_badge_color(rs$whiff, "whiff", TRUE), "; padding: 2px 4px; border-radius: 2px; font-weight: bold;"), 
-                 paste0("Whiff:", if (!is.na(rs$whiff)) paste0(round(rs$whiff, 0), "%") else "—")),
-            span(style = paste0("background: ", stat_badge_color(rs$chase, "chase", TRUE), "; padding: 2px 4px; border-radius: 2px; font-weight: bold;"), 
-                 paste0("Ch:", if (!is.na(rs$chase)) paste0(round(rs$chase, 0), "%") else "—")),
-            span(style = paste0("background: ", stat_badge_color(rs$chase_2k, "chase_2k", TRUE), "; padding: 2px 4px; border-radius: 2px; font-weight: bold;"), 
-                 paste0("2K:", if (!is.na(rs$chase_2k)) paste0(round(rs$chase_2k, 0), "%") else "—")),
-            span(style = paste0("background: ", stat_badge_color(rs$k_pct, "k_pct", TRUE), "; padding: 2px 4px; border-radius: 2px; font-weight: bold;"), 
-                 paste0("K:", if (!is.na(rs$k_pct)) paste0(round(rs$k_pct, 0), "%") else "—")),
+            style = "display: flex; gap: 2px; flex-wrap: wrap; font-size: 8px;",
+            span(style = paste0("background: ", stat_badge_color(rs$ev, "ev"), "; padding: 2px 3px; border-radius: 2px; font-weight: bold;"), 
+                 paste0("EV:", if (!is.na(rs$ev)) round(rs$ev, 1) else "-")),
+            span(style = paste0("background: ", stat_badge_color(rs$ev90, "ev90"), "; padding: 2px 3px; border-radius: 2px; font-weight: bold;"), 
+                 paste0("EV90:", if (!is.na(rs$ev90)) round(rs$ev90, 1) else "-")),
+            span(style = paste0("background: ", stat_badge_color(rs$fp_swing, "fp_swing"), "; padding: 2px 3px; border-radius: 2px; font-weight: bold;"), 
+                 paste0("FPSw:", if (!is.na(rs$fp_swing)) paste0(round(rs$fp_swing, 0), "%") else "-")),
+            span(style = paste0("background: ", stat_badge_color(rs$whiff, "whiff", TRUE), "; padding: 2px 3px; border-radius: 2px; font-weight: bold;"), 
+                 paste0("Wh:", if (!is.na(rs$whiff)) paste0(round(rs$whiff, 0), "%") else "-")),
+            span(style = paste0("background: ", stat_badge_color(rs$chase, "chase", TRUE), "; padding: 2px 3px; border-radius: 2px; font-weight: bold;"), 
+                 paste0("Ch:", if (!is.na(rs$chase)) paste0(round(rs$chase, 0), "%") else "-")),
+            span(style = paste0("background: ", stat_badge_color(rs$z_swing, "z_swing"), "; padding: 2px 3px; border-radius: 2px; font-weight: bold;"), 
+                 paste0("ZSw:", if (!is.na(rs$z_swing)) paste0(round(rs$z_swing, 0), "%") else "-")),
+            span(style = paste0("background: ", stat_badge_color(rs$chase_2k, "chase_2k", TRUE), "; padding: 2px 3px; border-radius: 2px; font-weight: bold;"), 
+                 paste0("2KC:", if (!is.na(rs$chase_2k)) paste0(round(rs$chase_2k, 0), "%") else "-")),
+            span(style = paste0("background: ", stat_badge_color(rs$bb_pct, "bb_pct"), "; padding: 2px 3px; border-radius: 2px; font-weight: bold;"), 
+                 paste0("BB:", if (!is.na(rs$bb_pct)) paste0(round(rs$bb_pct, 0), "%") else "-")),
+            span(style = paste0("background: ", stat_badge_color(rs$k_pct, "k_pct", TRUE), "; padding: 2px 3px; border-radius: 2px; font-weight: bold;"), 
+                 paste0("K:", if (!is.na(rs$k_pct)) paste0(round(rs$k_pct, 0), "%") else "-")),
+            span(style = paste0("background: ", stat_badge_color(rs$pull_pct, "pull_pct"), "; padding: 2px 3px; border-radius: 2px; font-weight: bold;"), 
+                 paste0("Pl:", if (!is.na(rs$pull_pct)) paste0(round(rs$pull_pct, 0), "%") else "-")),
+            span(style = paste0("background: ", stat_badge_color(rs$oppo_pct, "oppo_pct"), "; padding: 2px 3px; border-radius: 2px; font-weight: bold;"), 
+                 paste0("Op:", if (!is.na(rs$oppo_pct)) paste0(round(rs$oppo_pct, 0), "%") else "-")),
             # Behavior badges
             span(style = paste0("background: ", if (profile$aggro_1p == "Aggressive") "#FC8D59" else if (profile$aggro_1p == "Patient") "#91CF60" else "#E0E0E0", 
-                                "; padding: 2px 4px; border-radius: 2px; font-weight: bold;"), 
-                 paste0(substr(profile$aggro_1p, 1, 3), "1P")),
+                                "; padding: 2px 3px; border-radius: 2px; font-weight: bold;"), 
+                 paste0(substr(profile$aggro_1p, 1, 3), " 1P")),
             span(style = paste0("background: ", if (profile$chase_2k == "High") "#FC8D59" else if (profile$chase_2k == "Low") "#91CF60" else "#E0E0E0", 
-                                "; padding: 2px 4px; border-radius: 2px; font-weight: bold;"), 
-                 paste0(substr(profile$chase_2k, 1, 2), "2K"))
+                                "; padding: 2px 3px; border-radius: 2px; font-weight: bold;"), 
+                 paste0(substr(profile$chase_2k, 1, 2), " 2K")),
+            span(style = paste0("background: ", if (profile$zone_aggro == "Aggressive") "#FC8D59" else if (profile$zone_aggro == "Passive") "#91CF60" else "#E0E0E0", 
+                                "; padding: 2px 3px; border-radius: 2px; font-weight: bold;"), 
+                 paste0(substr(profile$zone_aggro, 1, 3), " IZ"))
           ),
           
           # Punish/Struggle
@@ -4865,48 +4887,62 @@ server <- function(input, output, session) {
                           gp = grid::gpar(fill = grade_color(profile$lhp_power), col = NA))
           grid::grid.text(paste0("L:", profile$lhp_power), x = 0.26, y = info_y - 0.006, gp = grid::gpar(fontsize = 6, fontface = "bold"))
           
-          # Key Stats (compact)
-          stats_x <- 0.32
+          # Key Stats (compact) - matching Scouting Cards format
+          stats_x <- 0.30
           stat_labels <- c(
+            paste0("EV:", if(!is.na(rs$ev)) round(rs$ev, 1) else "-"),
+            paste0("90:", if(!is.na(rs$ev90)) round(rs$ev90, 1) else "-"),
+            paste0("FP:", if(!is.na(rs$fp_swing)) paste0(round(rs$fp_swing, 0), "%") else "-"),
             paste0("Wh:", if(!is.na(rs$whiff)) paste0(round(rs$whiff, 0), "%") else "-"),
             paste0("Ch:", if(!is.na(rs$chase)) paste0(round(rs$chase, 0), "%") else "-"),
+            paste0("ZS:", if(!is.na(rs$z_swing)) paste0(round(rs$z_swing, 0), "%") else "-"),
             paste0("2K:", if(!is.na(rs$chase_2k)) paste0(round(rs$chase_2k, 0), "%") else "-"),
-            paste0("K:", if(!is.na(rs$k_pct)) paste0(round(rs$k_pct, 0), "%") else "-")
+            paste0("BB:", if(!is.na(rs$bb_pct)) paste0(round(rs$bb_pct, 0), "%") else "-"),
+            paste0("K:", if(!is.na(rs$k_pct)) paste0(round(rs$k_pct, 0), "%") else "-"),
+            paste0("Pl:", if(!is.na(rs$pull_pct)) paste0(round(rs$pull_pct, 0), "%") else "-"),
+            paste0("Op:", if(!is.na(rs$oppo_pct)) paste0(round(rs$oppo_pct, 0), "%") else "-")
           )
           stat_colors <- c(
+            stat_badge_color(rs$ev, "ev"),
+            stat_badge_color(rs$ev90, "ev90"),
+            stat_badge_color(rs$fp_swing, "fp_swing"),
             stat_badge_color(rs$whiff, "whiff", TRUE),
             stat_badge_color(rs$chase, "chase", TRUE),
+            stat_badge_color(rs$z_swing, "z_swing"),
             stat_badge_color(rs$chase_2k, "chase_2k", TRUE),
-            stat_badge_color(rs$k_pct, "k_pct", TRUE)
+            stat_badge_color(rs$bb_pct, "bb_pct"),
+            stat_badge_color(rs$k_pct, "k_pct", TRUE),
+            stat_badge_color(rs$pull_pct, "pull_pct"),
+            stat_badge_color(rs$oppo_pct, "oppo_pct")
           )
           for (j in seq_along(stat_labels)) {
-            x_pos <- stats_x + (j - 1) * 0.055
-            grid::grid.rect(x = x_pos, y = info_y - 0.006, width = 0.05, height = 0.014, just = c("center", "center"),
+            x_pos <- stats_x + (j - 1) * 0.032
+            grid::grid.rect(x = x_pos, y = info_y - 0.006, width = 0.030, height = 0.014, just = c("center", "center"),
                             gp = grid::gpar(fill = stat_colors[j], col = NA))
-            grid::grid.text(stat_labels[j], x = x_pos, y = info_y - 0.006, gp = grid::gpar(fontsize = 5, fontface = "bold"))
+            grid::grid.text(stat_labels[j], x = x_pos, y = info_y - 0.006, gp = grid::gpar(fontsize = 4, fontface = "bold"))
           }
           
           # Behavior badges
-          beh_x <- 0.56
-          beh_labels <- c(substr(profile$aggro_1p, 1, 3), substr(profile$chase_2k, 1, 2), substr(profile$zone_aggro, 1, 3))
+          beh_x <- 0.66
+          beh_labels <- c(paste0(substr(profile$aggro_1p, 1, 3), " 1P"), paste0(substr(profile$chase_2k, 1, 2), " 2K"), paste0(substr(profile$zone_aggro, 1, 3), " IZ"))
           beh_colors <- c(
             if (profile$aggro_1p == "Aggressive") "#FC8D59" else if (profile$aggro_1p == "Patient") "#91CF60" else "#E0E0E0",
             if (profile$chase_2k == "High") "#FC8D59" else if (profile$chase_2k == "Low") "#91CF60" else "#E0E0E0",
             if (profile$zone_aggro == "Aggressive") "#FC8D59" else if (profile$zone_aggro == "Passive") "#91CF60" else "#E0E0E0"
           )
           for (j in 1:3) {
-            x_pos <- beh_x + (j - 1) * 0.035
-            grid::grid.rect(x = x_pos, y = info_y - 0.006, width = 0.032, height = 0.014, just = c("center", "center"),
+            x_pos <- beh_x + (j - 1) * 0.045
+            grid::grid.rect(x = x_pos, y = info_y - 0.006, width = 0.042, height = 0.014, just = c("center", "center"),
                             gp = grid::gpar(fill = beh_colors[j], col = NA))
-            grid::grid.text(beh_labels[j], x = x_pos, y = info_y - 0.006, gp = grid::gpar(fontsize = 5, fontface = "bold"))
+            grid::grid.text(beh_labels[j], x = x_pos, y = info_y - 0.006, gp = grid::gpar(fontsize = 4, fontface = "bold"))
           }
           
           # Punish/Struggle (compact)
           punishes_text <- if (length(profile$punishes) > 0) substr(paste(profile$punishes, collapse = ","), 1, 25) else "-"
           struggles_text <- if (length(profile$struggles) > 0) substr(paste(profile$struggles, collapse = ","), 1, 25) else "-"
-          grid::grid.text(paste0("✓", punishes_text), x = 0.68, y = info_y, just = "left",
+          grid::grid.text(paste0("+", punishes_text), x = 0.68, y = info_y, just = "left",
                           gp = grid::gpar(fontsize = 5, col = "#1A9850"))
-          grid::grid.text(paste0("✗", struggles_text), x = 0.68, y = info_y - 0.012, just = "left",
+          grid::grid.text(paste0("-", struggles_text), x = 0.68, y = info_y - 0.012, just = "left",
                           gp = grid::gpar(fontsize = 5, col = "#D73027"))
           
           # === ROW 2: IN-GAME NOTES (emphasized!) ===
@@ -4983,29 +5019,39 @@ server <- function(input, output, session) {
                   h3(style = "color: white; margin: 0;", paste0(profile$name, " (", profile$hand, ")")),
                   span(style = "color: white; font-size: 11px;", paste0("n=", profile$n, " | RV/100: ", sprintf("%+.2f", rv)))
                 ),
-                # Performance badges row
-                div(style = "display: flex; gap: 4px; flex-wrap: wrap;",
-                    span(style = paste0("background: ", stat_badge_color(rs$ev, "ev"), "; padding: 3px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;"), 
+                # Performance badges row - matching Scouting Cards format
+                div(style = "display: flex; gap: 3px; flex-wrap: wrap;",
+                    span(style = paste0("background: ", stat_badge_color(rs$ev, "ev"), "; padding: 2px 4px; border-radius: 3px; font-size: 8px; font-weight: bold;"), 
                          paste0("EV:", if(!is.na(rs$ev)) round(rs$ev, 1) else "-")),
-                    span(style = paste0("background: ", stat_badge_color(rs$whiff, "whiff", TRUE), "; padding: 3px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;"), 
+                    span(style = paste0("background: ", stat_badge_color(rs$ev90, "ev90"), "; padding: 2px 4px; border-radius: 3px; font-size: 8px; font-weight: bold;"), 
+                         paste0("EV90:", if(!is.na(rs$ev90)) round(rs$ev90, 1) else "-")),
+                    span(style = paste0("background: ", stat_badge_color(rs$fp_swing, "fp_swing"), "; padding: 2px 4px; border-radius: 3px; font-size: 8px; font-weight: bold;"), 
+                         paste0("FPSw:", if(!is.na(rs$fp_swing)) paste0(round(rs$fp_swing, 0), "%") else "-")),
+                    span(style = paste0("background: ", stat_badge_color(rs$whiff, "whiff", TRUE), "; padding: 2px 4px; border-radius: 3px; font-size: 8px; font-weight: bold;"), 
                          paste0("Whiff:", if(!is.na(rs$whiff)) paste0(round(rs$whiff, 0), "%") else "-")),
-                    span(style = paste0("background: ", stat_badge_color(rs$chase, "chase", TRUE), "; padding: 3px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;"), 
+                    span(style = paste0("background: ", stat_badge_color(rs$chase, "chase", TRUE), "; padding: 2px 4px; border-radius: 3px; font-size: 8px; font-weight: bold;"), 
                          paste0("Chase:", if(!is.na(rs$chase)) paste0(round(rs$chase, 0), "%") else "-")),
-                    span(style = paste0("background: ", stat_badge_color(rs$chase_2k, "chase_2k", TRUE), "; padding: 3px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;"), 
+                    span(style = paste0("background: ", stat_badge_color(rs$z_swing, "z_swing"), "; padding: 2px 4px; border-radius: 3px; font-size: 8px; font-weight: bold;"), 
+                         paste0("ZSw:", if(!is.na(rs$z_swing)) paste0(round(rs$z_swing, 0), "%") else "-")),
+                    span(style = paste0("background: ", stat_badge_color(rs$chase_2k, "chase_2k", TRUE), "; padding: 2px 4px; border-radius: 3px; font-size: 8px; font-weight: bold;"), 
                          paste0("2KCh:", if(!is.na(rs$chase_2k)) paste0(round(rs$chase_2k, 0), "%") else "-")),
-                    span(style = paste0("background: ", stat_badge_color(rs$k_pct, "k_pct", TRUE), "; padding: 3px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;"), 
-                         paste0("K%:", if(!is.na(rs$k_pct)) paste0(round(rs$k_pct, 0), "%") else "-")),
-                    span(style = paste0("background: ", stat_badge_color(rs$bb_pct, "bb_pct"), "; padding: 3px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;"), 
+                    span(style = paste0("background: ", stat_badge_color(rs$bb_pct, "bb_pct"), "; padding: 2px 4px; border-radius: 3px; font-size: 8px; font-weight: bold;"), 
                          paste0("BB%:", if(!is.na(rs$bb_pct)) paste0(round(rs$bb_pct, 0), "%") else "-")),
+                    span(style = paste0("background: ", stat_badge_color(rs$k_pct, "k_pct", TRUE), "; padding: 2px 4px; border-radius: 3px; font-size: 8px; font-weight: bold;"), 
+                         paste0("K%:", if(!is.na(rs$k_pct)) paste0(round(rs$k_pct, 0), "%") else "-")),
+                    span(style = paste0("background: ", stat_badge_color(rs$pull_pct, "pull_pct"), "; padding: 2px 4px; border-radius: 3px; font-size: 8px; font-weight: bold;"), 
+                         paste0("Pull:", if(!is.na(rs$pull_pct)) paste0(round(rs$pull_pct, 0), "%") else "-")),
+                    span(style = paste0("background: ", stat_badge_color(rs$oppo_pct, "oppo_pct"), "; padding: 2px 4px; border-radius: 3px; font-size: 8px; font-weight: bold;"), 
+                         paste0("Oppo:", if(!is.na(rs$oppo_pct)) paste0(round(rs$oppo_pct, 0), "%") else "-")),
                     # Behavior badges
                     span(style = paste0("background: ", if(profile$aggro_1p == "Aggressive") "#FC8D59" else if(profile$aggro_1p == "Patient") "#91CF60" else "#E0E0E0", 
-                                        "; padding: 3px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;"), 
+                                        "; padding: 2px 4px; border-radius: 3px; font-size: 8px; font-weight: bold;"), 
                          paste0(substr(profile$aggro_1p, 1, 3), " 1P")),
                     span(style = paste0("background: ", if(profile$chase_2k == "High") "#FC8D59" else if(profile$chase_2k == "Low") "#91CF60" else "#E0E0E0", 
-                                        "; padding: 3px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;"), 
+                                        "; padding: 2px 4px; border-radius: 3px; font-size: 8px; font-weight: bold;"), 
                          paste0(substr(profile$chase_2k, 1, 2), " 2K")),
                     span(style = paste0("background: ", if(profile$zone_aggro == "Aggressive") "#FC8D59" else if(profile$zone_aggro == "Passive") "#91CF60" else "#E0E0E0", 
-                                        "; padding: 3px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;"), 
+                                        "; padding: 2px 4px; border-radius: 3px; font-size: 8px; font-weight: bold;"), 
                          paste0(substr(profile$zone_aggro, 1, 3), " IZ"))
                 )
             )
@@ -5192,7 +5238,44 @@ server <- function(input, output, session) {
             )
         ),
         
-        # === ROW 5: Hit/Out Locations ===
+        # === ROW 5: Movement Charts ===
+        div(style = "background: #f0f4f8; padding: 8px; border-radius: 4px; margin-bottom: 10px;",
+            div(style = "font-size: 10px; font-weight: bold; color: #006F71; margin-bottom: 6px;", "Movement Charts"),
+            div(style = "display: grid; grid-template-columns: 1fr 1fr; gap: 10px;",
+                # vs RHP movement
+                div(
+                    div(style = "font-size: 9px; font-weight: bold; color: #e65100; margin-bottom: 4px;", "vs RHP"),
+                    div(style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;",
+                        div(style = "text-align: center;",
+                            div(style = "font-size: 8px; color: #FA8072; font-weight: bold;", "FB"),
+                            plotOutput(paste0("report_mvmt_rhp_fb_", safe_name), height = "80px")),
+                        div(style = "text-align: center;",
+                            div(style = "font-size: 8px; color: #A020F0; font-weight: bold;", "BB"),
+                            plotOutput(paste0("report_mvmt_rhp_bb_", safe_name), height = "80px")),
+                        div(style = "text-align: center;",
+                            div(style = "font-size: 8px; color: #228B22; font-weight: bold;", "OS"),
+                            plotOutput(paste0("report_mvmt_rhp_os_", safe_name), height = "80px"))
+                    )
+                ),
+                # vs LHP movement
+                div(
+                    div(style = "font-size: 9px; font-weight: bold; color: #2e7d32; margin-bottom: 4px;", "vs LHP"),
+                    div(style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;",
+                        div(style = "text-align: center;",
+                            div(style = "font-size: 8px; color: #FA8072; font-weight: bold;", "FB"),
+                            plotOutput(paste0("report_mvmt_lhp_fb_", safe_name), height = "80px")),
+                        div(style = "text-align: center;",
+                            div(style = "font-size: 8px; color: #A020F0; font-weight: bold;", "BB"),
+                            plotOutput(paste0("report_mvmt_lhp_bb_", safe_name), height = "80px")),
+                        div(style = "text-align: center;",
+                            div(style = "font-size: 8px; color: #228B22; font-weight: bold;", "OS"),
+                            plotOutput(paste0("report_mvmt_lhp_os_", safe_name), height = "80px"))
+                    )
+                )
+            )
+        ),
+        
+        # === ROW 6: Hit/Out Locations ===
         div(style = "background: #f5f5f5; padding: 8px; border-radius: 4px; margin-bottom: 10px;",
             div(style = "font-size: 10px; font-weight: bold; color: #006F71; margin-bottom: 6px;", "Hit & Out Locations"),
             div(style = "display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;",
@@ -5211,7 +5294,7 @@ server <- function(input, output, session) {
             )
         ),
         
-        # === ROW 6: Pitch Plan Notes ===
+        # === ROW 7: Pitch Plan Notes ===
         div(style = "border-top: 2px solid #006F71; padding-top: 10px;",
             div(style = "font-size: 11px; font-weight: bold; color: #006F71; margin-bottom: 6px;", "Pitch Plan"),
             div(style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;",
@@ -5252,20 +5335,24 @@ server <- function(input, output, session) {
     # Velo RV output
     output[[paste0("velo_rv_preview_", safe_name)]] <- renderUI({
       if (is.null(profile)) return(NULL)
+      pgs <- profile$pitch_group_stats
       lines <- list()
-      # Hard FB
-      if (!is.null(profile$key_splits[["HardFB"]])) {
-        rv <- profile$key_splits[["HardFB"]]$rv100
+      # Hard FB (RHP)
+      fb <- pgs[["RHP_FB"]]
+      if (!is.null(fb$key_splits[["Hard"]])) {
+        rv <- fb$key_splits[["Hard"]]$rv100
         color <- if (rv >= 1) "#1A9850" else if (rv <= -1) "#D73027" else "#666"
-        lines <- c(lines, list(span(style = paste0("color: ", color, "; font-size: 8px; margin-right: 8px;"), paste0("FB95+:", sprintf("%+.1f", rv)))))
+        lines <- c(lines, list(span(style = paste0("color: ", color, "; font-size: 8px; margin-right: 8px;"), paste0("FB92+:", sprintf("%+.1f", rv)))))
       }
-      if (!is.null(profile$key_splits[["SoftFB"]])) {
-        rv <- profile$key_splits[["SoftFB"]]$rv100
+      if (!is.null(fb$key_splits[["Soft"]])) {
+        rv <- fb$key_splits[["Soft"]]$rv100
         color <- if (rv >= 1) "#1A9850" else if (rv <= -1) "#D73027" else "#666"
         lines <- c(lines, list(span(style = paste0("color: ", color, "; font-size: 8px; margin-right: 8px;"), paste0("FB<88:", sprintf("%+.1f", rv)))))
       }
-      if (!is.null(profile$key_splits[["HardOS"]])) {
-        rv <- profile$key_splits[["HardOS"]]$rv100
+      # Hard OS (RHP)
+      os <- pgs[["RHP_OS"]]
+      if (!is.null(os$key_splits[["HardOS"]])) {
+        rv <- os$key_splits[["HardOS"]]$rv100
         color <- if (rv >= 1) "#1A9850" else if (rv <= -1) "#D73027" else "#666"
         lines <- c(lines, list(span(style = paste0("color: ", color, "; font-size: 8px; margin-right: 8px;"), paste0("OS84+:", sprintf("%+.1f", rv)))))
       }
@@ -5275,16 +5362,16 @@ server <- function(input, output, session) {
     
     # Spray charts
     output[[paste0("report_spray_rhp_", safe_name)]] <- renderPlot({
-      create_mini_spray(tm_data, h_name, "Right")
+      create_mini_spray(tm_data, h_name, "hand", "Right")
     }, bg = "transparent")
     output[[paste0("report_spray_lhp_", safe_name)]] <- renderPlot({
-      create_mini_spray(tm_data, h_name, "Left")
+      create_mini_spray(tm_data, h_name, "hand", "Left")
     }, bg = "transparent")
     output[[paste0("report_spray_01k_", safe_name)]] <- renderPlot({
-      create_mini_spray(tm_data, h_name, NULL, "early")
+      create_mini_spray(tm_data, h_name, "strikes", "0-1")
     }, bg = "transparent")
     output[[paste0("report_spray_2k_", safe_name)]] <- renderPlot({
-      create_mini_spray(tm_data, h_name, NULL, "2k")
+      create_mini_spray(tm_data, h_name, "strikes", "2")
     }, bg = "transparent")
     
     # Pie charts - RHP
@@ -5294,7 +5381,7 @@ server <- function(input, output, session) {
     }, bg = "transparent")
     output[[paste0("report_pie_rhp_1p_", safe_name)]] <- renderPlot({
       if (is.null(profile)) return(NULL)
-      create_usage_pie(profile$rec_rhp_first_pitch)
+      create_usage_pie(profile$rec_rhp_1p)
     }, bg = "transparent")
     output[[paste0("report_pie_rhp_2k_", safe_name)]] <- renderPlot({
       if (is.null(profile)) return(NULL)
@@ -5308,7 +5395,7 @@ server <- function(input, output, session) {
     }, bg = "transparent")
     output[[paste0("report_pie_lhp_1p_", safe_name)]] <- renderPlot({
       if (is.null(profile)) return(NULL)
-      create_usage_pie(profile$rec_lhp_first_pitch)
+      create_usage_pie(profile$rec_lhp_1p)
     }, bg = "transparent")
     output[[paste0("report_pie_lhp_2k_", safe_name)]] <- renderPlot({
       if (is.null(profile)) return(NULL)
@@ -5317,24 +5404,46 @@ server <- function(input, output, session) {
     
     # Heatmaps - RHP
     output[[paste0("report_hm_rhp_fb_", safe_name)]] <- renderPlot({
-      create_metric_heatmap(tm_data, h_name, "FB", "Right", metric = "Whiff_pct")
+      create_metric_heatmap(tm_data, h_name, "FB", "Right", metric = "Whiff")
     }, bg = "transparent")
     output[[paste0("report_hm_rhp_bb_", safe_name)]] <- renderPlot({
-      create_metric_heatmap(tm_data, h_name, "BB", "Right", metric = "Whiff_pct")
+      create_metric_heatmap(tm_data, h_name, "BB", "Right", metric = "Whiff")
     }, bg = "transparent")
     output[[paste0("report_hm_rhp_os_", safe_name)]] <- renderPlot({
-      create_metric_heatmap(tm_data, h_name, "OS", "Right", metric = "Whiff_pct")
+      create_metric_heatmap(tm_data, h_name, "OS", "Right", metric = "Whiff")
     }, bg = "transparent")
     
     # Heatmaps - LHP
     output[[paste0("report_hm_lhp_fb_", safe_name)]] <- renderPlot({
-      create_metric_heatmap(tm_data, h_name, "FB", "Left", metric = "Whiff_pct")
+      create_metric_heatmap(tm_data, h_name, "FB", "Left", metric = "Whiff")
     }, bg = "transparent")
     output[[paste0("report_hm_lhp_bb_", safe_name)]] <- renderPlot({
-      create_metric_heatmap(tm_data, h_name, "BB", "Left", metric = "Whiff_pct")
+      create_metric_heatmap(tm_data, h_name, "BB", "Left", metric = "Whiff")
     }, bg = "transparent")
     output[[paste0("report_hm_lhp_os_", safe_name)]] <- renderPlot({
-      create_metric_heatmap(tm_data, h_name, "OS", "Left", metric = "Whiff_pct")
+      create_metric_heatmap(tm_data, h_name, "OS", "Left", metric = "Whiff")
+    }, bg = "transparent")
+    
+    # Movement plots - vs RHP (by pitch family)
+    output[[paste0("report_mvmt_rhp_fb_", safe_name)]] <- renderPlot({
+      create_movement_plot(tm_data, h_name, "Right", "FB")
+    }, bg = "transparent")
+    output[[paste0("report_mvmt_rhp_bb_", safe_name)]] <- renderPlot({
+      create_movement_plot(tm_data, h_name, "Right", "BB")
+    }, bg = "transparent")
+    output[[paste0("report_mvmt_rhp_os_", safe_name)]] <- renderPlot({
+      create_movement_plot(tm_data, h_name, "Right", "OS")
+    }, bg = "transparent")
+    
+    # Movement plots - vs LHP (by pitch family)
+    output[[paste0("report_mvmt_lhp_fb_", safe_name)]] <- renderPlot({
+      create_movement_plot(tm_data, h_name, "Left", "FB")
+    }, bg = "transparent")
+    output[[paste0("report_mvmt_lhp_bb_", safe_name)]] <- renderPlot({
+      create_movement_plot(tm_data, h_name, "Left", "BB")
+    }, bg = "transparent")
+    output[[paste0("report_mvmt_lhp_os_", safe_name)]] <- renderPlot({
+      create_movement_plot(tm_data, h_name, "Left", "OS")
     }, bg = "transparent")
     
     # Hit/Out location charts
@@ -5387,29 +5496,52 @@ server <- function(input, output, session) {
         grid::grid.text(paste0("n=", profile$n, " | RV/100: ", sprintf("%+.2f", rv)), x = 0.08, y = 0.945, just = "left",
                         gp = grid::gpar(fontsize = 9, col = "white"))
         
-        # Performance badges in header
-        badge_x <- 0.40
+        # Performance badges in header - matching Scouting Cards format
+        badge_x <- 0.32
         badge_labels <- c(
           paste0("EV:", if(!is.na(rs$ev)) round(rs$ev, 1) else "-"),
-          paste0("Whiff:", if(!is.na(rs$whiff)) paste0(round(rs$whiff, 0), "%") else "-"),
-          paste0("Chase:", if(!is.na(rs$chase)) paste0(round(rs$chase, 0), "%") else "-"),
-          paste0("2KCh:", if(!is.na(rs$chase_2k)) paste0(round(rs$chase_2k, 0), "%") else "-"),
-          paste0("K%:", if(!is.na(rs$k_pct)) paste0(round(rs$k_pct, 0), "%") else "-"),
-          paste0("BB%:", if(!is.na(rs$bb_pct)) paste0(round(rs$bb_pct, 0), "%") else "-")
+          paste0("EV90:", if(!is.na(rs$ev90)) round(rs$ev90, 1) else "-"),
+          paste0("FPSw:", if(!is.na(rs$fp_swing)) paste0(round(rs$fp_swing, 0), "%") else "-"),
+          paste0("Wh:", if(!is.na(rs$whiff)) paste0(round(rs$whiff, 0), "%") else "-"),
+          paste0("Ch:", if(!is.na(rs$chase)) paste0(round(rs$chase, 0), "%") else "-"),
+          paste0("ZSw:", if(!is.na(rs$z_swing)) paste0(round(rs$z_swing, 0), "%") else "-"),
+          paste0("2KC:", if(!is.na(rs$chase_2k)) paste0(round(rs$chase_2k, 0), "%") else "-"),
+          paste0("BB:", if(!is.na(rs$bb_pct)) paste0(round(rs$bb_pct, 0), "%") else "-"),
+          paste0("K:", if(!is.na(rs$k_pct)) paste0(round(rs$k_pct, 0), "%") else "-"),
+          paste0("Pl:", if(!is.na(rs$pull_pct)) paste0(round(rs$pull_pct, 0), "%") else "-"),
+          paste0("Op:", if(!is.na(rs$oppo_pct)) paste0(round(rs$oppo_pct, 0), "%") else "-")
         )
         badge_colors <- c(
           stat_badge_color(rs$ev, "ev"),
+          stat_badge_color(rs$ev90, "ev90"),
+          stat_badge_color(rs$fp_swing, "fp_swing"),
           stat_badge_color(rs$whiff, "whiff", TRUE),
           stat_badge_color(rs$chase, "chase", TRUE),
+          stat_badge_color(rs$z_swing, "z_swing"),
           stat_badge_color(rs$chase_2k, "chase_2k", TRUE),
+          stat_badge_color(rs$bb_pct, "bb_pct"),
           stat_badge_color(rs$k_pct, "k_pct", TRUE),
-          stat_badge_color(rs$bb_pct, "bb_pct")
+          stat_badge_color(rs$pull_pct, "pull_pct"),
+          stat_badge_color(rs$oppo_pct, "oppo_pct")
         )
         for (j in seq_along(badge_labels)) {
-          x_pos <- badge_x + (j - 1) * 0.085
-          grid::grid.rect(x = x_pos, y = 0.955, width = 0.075, height = 0.018, just = c("center", "center"),
+          x_pos <- badge_x + (j - 1) * 0.055
+          grid::grid.rect(x = x_pos, y = 0.955, width = 0.050, height = 0.018, just = c("center", "center"),
                           gp = grid::gpar(fill = badge_colors[j], col = NA))
-          grid::grid.text(badge_labels[j], x = x_pos, y = 0.955, gp = grid::gpar(fontsize = 6, fontface = "bold"))
+          grid::grid.text(badge_labels[j], x = x_pos, y = 0.955, gp = grid::gpar(fontsize = 5, fontface = "bold"))
+        }
+        # Behavior badges
+        beh_labels <- c(paste0(substr(profile$aggro_1p, 1, 3), " 1P"), paste0(substr(profile$chase_2k, 1, 2), " 2K"), paste0(substr(profile$zone_aggro, 1, 3), " IZ"))
+        beh_colors <- c(
+          if (profile$aggro_1p == "Aggressive") "#FC8D59" else if (profile$aggro_1p == "Patient") "#91CF60" else "#E0E0E0",
+          if (profile$chase_2k == "High") "#FC8D59" else if (profile$chase_2k == "Low") "#91CF60" else "#E0E0E0",
+          if (profile$zone_aggro == "Aggressive") "#FC8D59" else if (profile$zone_aggro == "Passive") "#91CF60" else "#E0E0E0"
+        )
+        for (j in 1:3) {
+          x_pos <- 0.92 + (j - 1) * 0.04 - 0.06
+          grid::grid.rect(x = x_pos, y = 0.955, width = 0.038, height = 0.018, just = c("center", "center"),
+                          gp = grid::gpar(fill = beh_colors[j], col = NA))
+          grid::grid.text(beh_labels[j], x = x_pos, y = 0.955, gp = grid::gpar(fontsize = 5, fontface = "bold"))
         }
         
         # === ROW 1: Grades + Punish/Struggle + Count Stats ===
@@ -5464,7 +5596,7 @@ server <- function(input, output, session) {
         if (length(profile$count_insights) > 0) {
           grid::grid.text("Count Insights:", x = 0.72, y = 0.91, just = "left", gp = grid::gpar(fontsize = 8, fontface = "bold", col = "#006F71"))
           for (i in seq_along(profile$count_insights[1:min(3, length(profile$count_insights))])) {
-            grid::grid.text(paste0("• ", profile$count_insights[i]), x = 0.72, y = 0.895 - (i-1) * 0.015, just = "left",
+            grid::grid.text(paste0("- ", profile$count_insights[i]), x = 0.72, y = 0.895 - (i-1) * 0.015, just = "left",
                             gp = grid::gpar(fontsize = 6))
           }
         }
@@ -5479,10 +5611,10 @@ server <- function(input, output, session) {
           vp <- grid::viewport(x = x_pos, y = spray_y, width = 0.20, height = 0.10, just = c("center", "center"))
           grid::pushViewport(vp)
           spray_plot <- tryCatch({
-            if (i == 1) create_mini_spray(tm_data, h_name, "Right")
-            else if (i == 2) create_mini_spray(tm_data, h_name, "Left")
-            else if (i == 3) create_mini_spray(tm_data, h_name, NULL, "early")
-            else create_mini_spray(tm_data, h_name, NULL, "2k")
+            if (i == 1) create_mini_spray(tm_data, h_name, "hand", "Right")
+            else if (i == 2) create_mini_spray(tm_data, h_name, "hand", "Left")
+            else if (i == 3) create_mini_spray(tm_data, h_name, "strikes", "0-1")
+            else create_mini_spray(tm_data, h_name, "strikes", "2")
           }, error = function(e) NULL)
           if (!is.null(spray_plot)) print(spray_plot, newpage = FALSE)
           grid::popViewport()
@@ -5500,7 +5632,7 @@ server <- function(input, output, session) {
           x_pos <- 0.08 + (j - 1) * 0.10
           vp <- grid::viewport(x = x_pos, y = pie_y, width = 0.08, height = 0.08, just = c("center", "center"))
           grid::pushViewport(vp)
-          pie_data <- switch(j, profile$rec_rhp_overall, profile$rec_rhp_first_pitch, profile$rec_rhp_putaway)
+          pie_data <- switch(j, profile$rec_rhp_overall, profile$rec_rhp_1p, profile$rec_rhp_putaway)
           p <- tryCatch(create_usage_pie(pie_data), error = function(e) NULL)
           if (!is.null(p)) print(p, newpage = FALSE)
           grid::popViewport()
@@ -5518,7 +5650,7 @@ server <- function(input, output, session) {
           grid::pushViewport(vp)
           hm_plot <- tryCatch({
             pitch_grp <- c("FB", "BB", "OS")[j]
-            create_metric_heatmap(tm_data, h_name, pitch_grp, "Right", metric = "Whiff_pct")
+            create_metric_heatmap(tm_data, h_name, pitch_grp, "Right", metric = "Whiff")
           }, error = function(e) NULL)
           if (!is.null(hm_plot)) print(hm_plot, newpage = FALSE)
           grid::popViewport()
@@ -5535,7 +5667,7 @@ server <- function(input, output, session) {
           x_pos <- 0.08 + (j - 1) * 0.10
           vp <- grid::viewport(x = x_pos, y = pie_y, width = 0.08, height = 0.08, just = c("center", "center"))
           grid::pushViewport(vp)
-          pie_data <- switch(j, profile$rec_lhp_overall, profile$rec_lhp_first_pitch, profile$rec_lhp_putaway)
+          pie_data <- switch(j, profile$rec_lhp_overall, profile$rec_lhp_1p, profile$rec_lhp_putaway)
           p <- tryCatch(create_usage_pie(pie_data), error = function(e) NULL)
           if (!is.null(p)) print(p, newpage = FALSE)
           grid::popViewport()
@@ -5551,7 +5683,7 @@ server <- function(input, output, session) {
           grid::pushViewport(vp)
           hm_plot <- tryCatch({
             pitch_grp <- c("FB", "BB", "OS")[j]
-            create_metric_heatmap(tm_data, h_name, pitch_grp, "Left", metric = "Whiff_pct")
+            create_metric_heatmap(tm_data, h_name, pitch_grp, "Left", metric = "Whiff")
           }, error = function(e) NULL)
           if (!is.null(hm_plot)) print(hm_plot, newpage = FALSE)
           grid::popViewport()
