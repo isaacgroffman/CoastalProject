@@ -4739,24 +4739,44 @@ server <- function(input, output, session) {
             )
           ),
           
-          # Key Stats (compact)
+          # Key Stats (compact - same as Scouting Cards original)
           div(
-            style = "display: flex; gap: 3px; flex-wrap: wrap; font-size: 9px;",
+            style = "display: flex; gap: 3px; flex-wrap: wrap; font-size: 8px;",
+            span(style = paste0("background: ", stat_badge_color(rs$ev, "ev"), "; padding: 2px 4px; border-radius: 2px; font-weight: bold;"), 
+                 paste0("EV:", if (!is.na(rs$ev)) round(rs$ev, 1) else "—")),
+            span(style = paste0("background: ", stat_badge_color(rs$ev90, "ev90"), "; padding: 2px 4px; border-radius: 2px; font-weight: bold;"), 
+                 paste0("EV90:", if (!is.na(rs$ev90)) round(rs$ev90, 1) else "—")),
+            span(style = paste0("background: ", stat_badge_color(rs$fp_swing, "fp_swing"), "; padding: 2px 4px; border-radius: 2px; font-weight: bold;"), 
+                 paste0("FP:", if (!is.na(rs$fp_swing)) paste0(round(rs$fp_swing, 0), "%") else "—")),
             span(style = paste0("background: ", stat_badge_color(rs$whiff, "whiff", TRUE), "; padding: 2px 4px; border-radius: 2px; font-weight: bold;"), 
-                 paste0("Whiff:", if (!is.na(rs$whiff)) paste0(round(rs$whiff, 0), "%") else "—")),
+                 paste0("Wh:", if (!is.na(rs$whiff)) paste0(round(rs$whiff, 0), "%") else "—")),
             span(style = paste0("background: ", stat_badge_color(rs$chase, "chase", TRUE), "; padding: 2px 4px; border-radius: 2px; font-weight: bold;"), 
                  paste0("Ch:", if (!is.na(rs$chase)) paste0(round(rs$chase, 0), "%") else "—")),
+            span(style = paste0("background: ", stat_badge_color(rs$z_swing, "z_swing"), "; padding: 2px 4px; border-radius: 2px; font-weight: bold;"), 
+                 paste0("ZS:", if (!is.na(rs$z_swing)) paste0(round(rs$z_swing, 0), "%") else "—")),
             span(style = paste0("background: ", stat_badge_color(rs$chase_2k, "chase_2k", TRUE), "; padding: 2px 4px; border-radius: 2px; font-weight: bold;"), 
                  paste0("2K:", if (!is.na(rs$chase_2k)) paste0(round(rs$chase_2k, 0), "%") else "—")),
+            span(style = paste0("background: ", stat_badge_color(rs$bb_pct, "bb_pct"), "; padding: 2px 4px; border-radius: 2px; font-weight: bold;"), 
+                 paste0("BB:", if (!is.na(rs$bb_pct)) paste0(round(rs$bb_pct, 0), "%") else "—")),
             span(style = paste0("background: ", stat_badge_color(rs$k_pct, "k_pct", TRUE), "; padding: 2px 4px; border-radius: 2px; font-weight: bold;"), 
                  paste0("K:", if (!is.na(rs$k_pct)) paste0(round(rs$k_pct, 0), "%") else "—")),
-            # Behavior badges
+            span(style = paste0("background: ", stat_badge_color(rs$pull_pct, "pull_pct"), "; padding: 2px 4px; border-radius: 2px; font-weight: bold;"), 
+                 paste0("Pl:", if (!is.na(rs$pull_pct)) paste0(round(rs$pull_pct, 0), "%") else "—")),
+            span(style = paste0("background: ", stat_badge_color(rs$oppo_pct, "oppo_pct"), "; padding: 2px 4px; border-radius: 2px; font-weight: bold;"), 
+                 paste0("Op:", if (!is.na(rs$oppo_pct)) paste0(round(rs$oppo_pct, 0), "%") else "—"))
+          ),
+          # Behavior badges
+          div(
+            style = "display: flex; gap: 3px; font-size: 8px;",
             span(style = paste0("background: ", if (profile$aggro_1p == "Aggressive") "#FC8D59" else if (profile$aggro_1p == "Patient") "#91CF60" else "#E0E0E0", 
                                 "; padding: 2px 4px; border-radius: 2px; font-weight: bold;"), 
-                 paste0(substr(profile$aggro_1p, 1, 3), "1P")),
+                 paste0(substr(profile$aggro_1p, 1, 3), " 1P")),
             span(style = paste0("background: ", if (profile$chase_2k == "High") "#FC8D59" else if (profile$chase_2k == "Low") "#91CF60" else "#E0E0E0", 
                                 "; padding: 2px 4px; border-radius: 2px; font-weight: bold;"), 
-                 paste0(substr(profile$chase_2k, 1, 2), "2K"))
+                 paste0(substr(profile$chase_2k, 1, 2), " 2K")),
+            span(style = paste0("background: ", if (profile$zone_aggro == "Aggressive") "#FC8D59" else if (profile$zone_aggro == "Passive") "#91CF60" else "#E0E0E0", 
+                                "; padding: 2px 4px; border-radius: 2px; font-weight: bold;"), 
+                 paste0(substr(profile$zone_aggro, 1, 3), " IZ"))
           ),
           
           # Punish/Struggle
@@ -4875,29 +4895,37 @@ server <- function(input, output, session) {
                           gp = grid::gpar(fill = grade_color(profile$lhp_power), col = NA))
           grid::grid.text(paste0("L:", profile$lhp_power), x = 0.26, y = info_y - 0.006, gp = grid::gpar(fontsize = 6, fontface = "bold"))
           
-          # Key Stats (compact)
-          stats_x <- 0.32
+          # Key Stats (compact - matching original code format)
+          stats_x <- 0.30
           stat_labels <- c(
+            paste0("EV:", if(!is.na(rs$ev)) round(rs$ev, 1) else "-"),
+            paste0("EV90:", if(!is.na(rs$ev90)) round(rs$ev90, 1) else "-"),
+            paste0("FP:", if(!is.na(rs$fp_swing)) paste0(round(rs$fp_swing, 0), "%") else "-"),
             paste0("Wh:", if(!is.na(rs$whiff)) paste0(round(rs$whiff, 0), "%") else "-"),
             paste0("Ch:", if(!is.na(rs$chase)) paste0(round(rs$chase, 0), "%") else "-"),
+            paste0("ZS:", if(!is.na(rs$z_swing)) paste0(round(rs$z_swing, 0), "%") else "-"),
             paste0("2K:", if(!is.na(rs$chase_2k)) paste0(round(rs$chase_2k, 0), "%") else "-"),
             paste0("K:", if(!is.na(rs$k_pct)) paste0(round(rs$k_pct, 0), "%") else "-")
           )
           stat_colors <- c(
+            stat_badge_color(rs$ev, "ev"),
+            stat_badge_color(rs$ev90, "ev90"),
+            stat_badge_color(rs$fp_swing, "fp_swing"),
             stat_badge_color(rs$whiff, "whiff", TRUE),
             stat_badge_color(rs$chase, "chase", TRUE),
+            stat_badge_color(rs$z_swing, "z_swing"),
             stat_badge_color(rs$chase_2k, "chase_2k", TRUE),
             stat_badge_color(rs$k_pct, "k_pct", TRUE)
           )
           for (j in seq_along(stat_labels)) {
-            x_pos <- stats_x + (j - 1) * 0.055
-            grid::grid.rect(x = x_pos, y = info_y - 0.006, width = 0.05, height = 0.014, just = c("center", "center"),
+            x_pos <- stats_x + (j - 1) * 0.045
+            grid::grid.rect(x = x_pos, y = info_y - 0.006, width = 0.042, height = 0.014, just = c("center", "center"),
                             gp = grid::gpar(fill = stat_colors[j], col = NA))
-            grid::grid.text(stat_labels[j], x = x_pos, y = info_y - 0.006, gp = grid::gpar(fontsize = 5, fontface = "bold"))
+            grid::grid.text(stat_labels[j], x = x_pos, y = info_y - 0.006, gp = grid::gpar(fontsize = 4.5, fontface = "bold"))
           }
           
           # Behavior badges
-          beh_x <- 0.56
+          beh_x <- 0.68
           beh_labels <- c(substr(profile$aggro_1p, 1, 3), substr(profile$chase_2k, 1, 2), substr(profile$zone_aggro, 1, 3))
           beh_colors <- c(
             if (profile$aggro_1p == "Aggressive") "#FC8D59" else if (profile$aggro_1p == "Patient") "#91CF60" else "#E0E0E0",
@@ -4911,12 +4939,12 @@ server <- function(input, output, session) {
             grid::grid.text(beh_labels[j], x = x_pos, y = info_y - 0.006, gp = grid::gpar(fontsize = 5, fontface = "bold"))
           }
           
-          # Punish/Struggle (compact)
-          punishes_text <- if (length(profile$punishes) > 0) substr(paste(profile$punishes, collapse = ","), 1, 25) else "-"
-          struggles_text <- if (length(profile$struggles) > 0) substr(paste(profile$struggles, collapse = ","), 1, 25) else "-"
-          grid::grid.text(paste0("+", punishes_text), x = 0.68, y = info_y, just = "left",
+          # Punish/Struggle (compact - positioned to right of behavior badges)
+          punishes_text <- if (length(profile$punishes) > 0) substr(paste(profile$punishes, collapse = ","), 1, 20) else "-"
+          struggles_text <- if (length(profile$struggles) > 0) substr(paste(profile$struggles, collapse = ","), 1, 20) else "-"
+          grid::grid.text(paste0("+", punishes_text), x = 0.79, y = info_y, just = "left",
                           gp = grid::gpar(fontsize = 5, col = "#1A9850"))
-          grid::grid.text(paste0("-", struggles_text), x = 0.68, y = info_y - 0.012, just = "left",
+          grid::grid.text(paste0("-", struggles_text), x = 0.79, y = info_y - 0.012, just = "left",
                           gp = grid::gpar(fontsize = 5, col = "#D73027"))
           
           # === ROW 2: IN-GAME NOTES (emphasized!) ===
@@ -4993,21 +5021,33 @@ server <- function(input, output, session) {
                   h3(style = "color: white; margin: 0;", paste0(profile$name, " (", profile$hand, ")")),
                   span(style = "color: white; font-size: 11px;", paste0("n=", profile$n, " | RV/100: ", sprintf("%+.2f", rv)))
                 ),
-                # Performance badges row
-                div(style = "display: flex; gap: 4px; flex-wrap: wrap;",
-                    span(style = paste0("background: ", stat_badge_color(rs$ev, "ev"), "; padding: 3px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;"), 
+                # Stats bar - pill style (same format as Scouting Cards)
+                div(style = "display: flex; gap: 4px; flex-wrap: wrap; font-size: 9px;",
+                    span(style = paste0("background: ", stat_badge_color(rs$ev, "ev"), "; padding: 3px 6px; border-radius: 3px; font-weight: bold;"), 
                          paste0("EV:", if(!is.na(rs$ev)) round(rs$ev, 1) else "-")),
-                    span(style = paste0("background: ", stat_badge_color(rs$whiff, "whiff", TRUE), "; padding: 3px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;"), 
-                         paste0("Whiff:", if(!is.na(rs$whiff)) paste0(round(rs$whiff, 0), "%") else "-")),
-                    span(style = paste0("background: ", stat_badge_color(rs$chase, "chase", TRUE), "; padding: 3px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;"), 
-                         paste0("Chase:", if(!is.na(rs$chase)) paste0(round(rs$chase, 0), "%") else "-")),
-                    span(style = paste0("background: ", stat_badge_color(rs$chase_2k, "chase_2k", TRUE), "; padding: 3px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;"), 
-                         paste0("2KCh:", if(!is.na(rs$chase_2k)) paste0(round(rs$chase_2k, 0), "%") else "-")),
-                    span(style = paste0("background: ", stat_badge_color(rs$k_pct, "k_pct", TRUE), "; padding: 3px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;"), 
-                         paste0("K%:", if(!is.na(rs$k_pct)) paste0(round(rs$k_pct, 0), "%") else "-")),
-                    span(style = paste0("background: ", stat_badge_color(rs$bb_pct, "bb_pct"), "; padding: 3px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;"), 
-                         paste0("BB%:", if(!is.na(rs$bb_pct)) paste0(round(rs$bb_pct, 0), "%") else "-")),
-                    # Behavior badges
+                    span(style = paste0("background: ", stat_badge_color(rs$ev90, "ev90"), "; padding: 3px 6px; border-radius: 3px; font-weight: bold;"), 
+                         paste0("EV90:", if(!is.na(rs$ev90)) round(rs$ev90, 1) else "-")),
+                    span(style = paste0("background: ", stat_badge_color(rs$fp_swing, "fp_swing"), "; padding: 3px 6px; border-radius: 3px; font-weight: bold;"), 
+                         paste0("FPSw:", if(!is.na(rs$fp_swing)) paste0(round(rs$fp_swing, 1), "%") else "-")),
+                    span(style = paste0("background: ", stat_badge_color(rs$whiff, "whiff", TRUE), "; padding: 3px 6px; border-radius: 3px; font-weight: bold;"), 
+                         paste0("Whiff:", if(!is.na(rs$whiff)) paste0(round(rs$whiff, 1), "%") else "-")),
+                    span(style = paste0("background: ", stat_badge_color(rs$chase, "chase", TRUE), "; padding: 3px 6px; border-radius: 3px; font-weight: bold;"), 
+                         paste0("Chase:", if(!is.na(rs$chase)) paste0(round(rs$chase, 1), "%") else "-")),
+                    span(style = paste0("background: ", stat_badge_color(rs$z_swing, "z_swing"), "; padding: 3px 6px; border-radius: 3px; font-weight: bold;"), 
+                         paste0("ZSw:", if(!is.na(rs$z_swing)) paste0(round(rs$z_swing, 1), "%") else "-")),
+                    span(style = paste0("background: ", stat_badge_color(rs$chase_2k, "chase_2k", TRUE), "; padding: 3px 6px; border-radius: 3px; font-weight: bold;"), 
+                         paste0("2KCh:", if(!is.na(rs$chase_2k)) paste0(round(rs$chase_2k, 1), "%") else "-")),
+                    span(style = paste0("background: ", stat_badge_color(rs$bb_pct, "bb_pct"), "; padding: 3px 6px; border-radius: 3px; font-weight: bold;"), 
+                         paste0("BB%:", if(!is.na(rs$bb_pct)) paste0(round(rs$bb_pct, 1), "%") else "-")),
+                    span(style = paste0("background: ", stat_badge_color(rs$k_pct, "k_pct", TRUE), "; padding: 3px 6px; border-radius: 3px; font-weight: bold;"), 
+                         paste0("K%:", if(!is.na(rs$k_pct)) paste0(round(rs$k_pct, 1), "%") else "-")),
+                    span(style = paste0("background: ", stat_badge_color(rs$pull_pct, "pull_pct"), "; padding: 3px 6px; border-radius: 3px; font-weight: bold;"), 
+                         paste0("Pull:", if(!is.na(rs$pull_pct)) paste0(round(rs$pull_pct, 0), "%") else "-")),
+                    span(style = paste0("background: ", stat_badge_color(rs$oppo_pct, "oppo_pct"), "; padding: 3px 6px; border-radius: 3px; font-weight: bold;"), 
+                         paste0("Oppo:", if(!is.na(rs$oppo_pct)) paste0(round(rs$oppo_pct, 0), "%") else "-"))
+                ),
+                # Behavior badges
+                div(style = "display: flex; gap: 4px; margin-top: 4px;",
                     span(style = paste0("background: ", if(profile$aggro_1p == "Aggressive") "#FC8D59" else if(profile$aggro_1p == "Patient") "#91CF60" else "#E0E0E0", 
                                         "; padding: 3px 6px; border-radius: 3px; font-size: 9px; font-weight: bold;"), 
                          paste0(substr(profile$aggro_1p, 1, 3), " 1P")),
@@ -5473,29 +5513,57 @@ server <- function(input, output, session) {
         grid::grid.text(paste0("n=", profile$n, " | RV/100: ", sprintf("%+.2f", rv)), x = 0.08, y = 0.945, just = "left",
                         gp = grid::gpar(fontsize = 9, col = "white"))
         
-        # Performance badges in header
-        badge_x <- 0.40
+        # Performance badges in header (matching original Scouting Cards format)
+        badge_x <- 0.35
         badge_labels <- c(
           paste0("EV:", if(!is.na(rs$ev)) round(rs$ev, 1) else "-"),
-          paste0("Whiff:", if(!is.na(rs$whiff)) paste0(round(rs$whiff, 0), "%") else "-"),
-          paste0("Chase:", if(!is.na(rs$chase)) paste0(round(rs$chase, 0), "%") else "-"),
-          paste0("2KCh:", if(!is.na(rs$chase_2k)) paste0(round(rs$chase_2k, 0), "%") else "-"),
-          paste0("K%:", if(!is.na(rs$k_pct)) paste0(round(rs$k_pct, 0), "%") else "-"),
-          paste0("BB%:", if(!is.na(rs$bb_pct)) paste0(round(rs$bb_pct, 0), "%") else "-")
+          paste0("EV90:", if(!is.na(rs$ev90)) round(rs$ev90, 1) else "-"),
+          paste0("FPSw:", if(!is.na(rs$fp_swing)) paste0(round(rs$fp_swing, 1), "%") else "-"),
+          paste0("Whiff:", if(!is.na(rs$whiff)) paste0(round(rs$whiff, 1), "%") else "-"),
+          paste0("Chase:", if(!is.na(rs$chase)) paste0(round(rs$chase, 1), "%") else "-"),
+          paste0("ZSw:", if(!is.na(rs$z_swing)) paste0(round(rs$z_swing, 1), "%") else "-"),
+          paste0("2KCh:", if(!is.na(rs$chase_2k)) paste0(round(rs$chase_2k, 1), "%") else "-"),
+          paste0("BB%:", if(!is.na(rs$bb_pct)) paste0(round(rs$bb_pct, 1), "%") else "-"),
+          paste0("K%:", if(!is.na(rs$k_pct)) paste0(round(rs$k_pct, 1), "%") else "-"),
+          paste0("Pull:", if(!is.na(rs$pull_pct)) paste0(round(rs$pull_pct, 0), "%") else "-"),
+          paste0("Oppo:", if(!is.na(rs$oppo_pct)) paste0(round(rs$oppo_pct, 0), "%") else "-")
         )
         badge_colors <- c(
           stat_badge_color(rs$ev, "ev"),
+          stat_badge_color(rs$ev90, "ev90"),
+          stat_badge_color(rs$fp_swing, "fp_swing"),
           stat_badge_color(rs$whiff, "whiff", TRUE),
           stat_badge_color(rs$chase, "chase", TRUE),
+          stat_badge_color(rs$z_swing, "z_swing"),
           stat_badge_color(rs$chase_2k, "chase_2k", TRUE),
+          stat_badge_color(rs$bb_pct, "bb_pct"),
           stat_badge_color(rs$k_pct, "k_pct", TRUE),
-          stat_badge_color(rs$bb_pct, "bb_pct")
+          stat_badge_color(rs$pull_pct, "pull_pct"),
+          stat_badge_color(rs$oppo_pct, "oppo_pct")
         )
         for (j in seq_along(badge_labels)) {
-          x_pos <- badge_x + (j - 1) * 0.085
-          grid::grid.rect(x = x_pos, y = 0.955, width = 0.075, height = 0.018, just = c("center", "center"),
+          x_pos <- badge_x + (j - 1) * 0.058
+          grid::grid.rect(x = x_pos, y = 0.955, width = 0.054, height = 0.018, just = c("center", "center"),
                           gp = grid::gpar(fill = badge_colors[j], col = NA))
-          grid::grid.text(badge_labels[j], x = x_pos, y = 0.955, gp = grid::gpar(fontsize = 6, fontface = "bold"))
+          grid::grid.text(badge_labels[j], x = x_pos, y = 0.955, gp = grid::gpar(fontsize = 5, fontface = "bold"))
+        }
+        # Behavior badges (second row)
+        beh_x <- 0.35
+        beh_labels <- c(
+          paste0(substr(profile$aggro_1p, 1, 3), " 1P"),
+          paste0(substr(profile$chase_2k, 1, 2), " 2K"),
+          paste0(substr(profile$zone_aggro, 1, 3), " IZ")
+        )
+        beh_colors <- c(
+          if(profile$aggro_1p == "Aggressive") "#FC8D59" else if(profile$aggro_1p == "Patient") "#91CF60" else "#E0E0E0",
+          if(profile$chase_2k == "High") "#FC8D59" else if(profile$chase_2k == "Low") "#91CF60" else "#E0E0E0",
+          if(profile$zone_aggro == "Aggressive") "#FC8D59" else if(profile$zone_aggro == "Passive") "#91CF60" else "#E0E0E0"
+        )
+        for (j in seq_along(beh_labels)) {
+          x_pos <- beh_x + (j - 1) * 0.058
+          grid::grid.rect(x = x_pos, y = 0.938, width = 0.054, height = 0.015, just = c("center", "center"),
+                          gp = grid::gpar(fill = beh_colors[j], col = NA))
+          grid::grid.text(beh_labels[j], x = x_pos, y = 0.938, gp = grid::gpar(fontsize = 5, fontface = "bold"))
         }
         
         # === ROW 1: Grades + Punish/Struggle + Count Stats ===
