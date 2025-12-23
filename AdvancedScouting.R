@@ -3436,7 +3436,7 @@ ui <- fluidPage(
     id = "tabs",
     type = "pills",
     
-    # Tab 1: Hitter Cards (Compact - 9 per page)
+    # Tab 1: Hitter Cards (Multiple formats available)
     tabPanel(
       "Hitter Cards",
       div(style = "margin-top: 15px; padding: 15px;",
@@ -3444,14 +3444,22 @@ ui <- fluidPage(
           # Controls Row
           div(style = "background: #fff3e0; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ffcc80;",
               fluidRow(
-                column(6,
-                       selectizeInput("hitter_cards_select", "Select Hitters (up to 9 per page)",
+                column(4,
+                       selectizeInput("hitter_cards_select", "Select Hitters",
                                       choices = all_hitters,
                                       selected = all_hitters[1:min(9, length(all_hitters))],
                                       multiple = TRUE,
                                       options = list(maxItems = 18, placeholder = "Choose hitters..."))
                 ),
                 column(3,
+                       radioButtons("card_format", "Card Format",
+                                    choices = c("One-Row (9/page)" = "one_row",
+                                                "Half-Page (2/page)" = "half_page",
+                                                "Full-Page (1/page)" = "full_page"),
+                                    selected = "one_row",
+                                    inline = FALSE)
+                ),
+                column(2,
                        textInput("hitter_cards_title", "Report Title", value = "Game Day Cards")
                 ),
                 column(3,
@@ -3463,15 +3471,15 @@ ui <- fluidPage(
           
           # Legend row
           div(style = "font-size: 11px; margin-bottom: 10px; display: flex; gap: 20px; flex-wrap: wrap;",
-              span(style = "color: #1f77b4; font-weight: bold;", "FB"), " Fastball | ",
-              span(style = "color: #9370DB; font-weight: bold;", "BB"), " Breaking | ",
+              span(style = "color: #FA8072; font-weight: bold;", "FB"), " Fastball | ",
+              span(style = "color: #A020F0; font-weight: bold;", "BB"), " Breaking | ",
               span(style = "color: #2E8B57; font-weight: bold;", "OS"), " Offspeed | ",
               span(style = "border: 2px solid #1A9850; padding: 1px 4px; border-radius: 3px; font-size: 9px;", "Green"), " Good matchup | ",
               span(style = "border: 2px solid #D73027; padding: 1px 4px; border-radius: 3px; font-size: 9px;", "Red"), " Tough matchup"
           ),
           
-          # Cards output
-          div(style = "overflow-x: auto;",
+          # Cards output - conditionally rendered based on format
+          div(style = "overflow-x: auto; overflow-y: auto; max-height: 85vh;",
               uiOutput("hitter_cards_ui"))
       )
     ),
@@ -4696,6 +4704,8 @@ server <- function(input, output, session) {
     req(input$hitter_cards_select)
     
     hitters <- input$hitter_cards_select
+    card_format <- input$card_format
+    if (is.null(card_format)) card_format <- "one_row"
     
     card_list <- lapply(hitters, function(h_name) {
       profile <- get_scouting_profile(h_name)
@@ -4709,95 +4719,760 @@ server <- function(input, output, session) {
       rs <- profile$raw_stats_overall
       safe_name <- gsub("[^A-Za-z0-9]", "", h_name)
       
-      # COMPACT Game-Day Card - Two rows: Info + Notes
-      div(
-        style = paste0("border: 2px solid ", border_color, "; border-radius: 4px; margin-bottom: 6px; padding: 6px; background: #fafafa;"),
-        
-        # ROW 1: Info Row (compact)
+      # ============================================================
+      # ONE-ROW DETAILED CARD (Enhanced with heatmaps, movement, etc.)
+      # ============================================================
+      if (card_format == "one_row") {
         div(
-          style = "display: grid; grid-template-columns: 140px 1fr 150px; gap: 8px; align-items: center; padding-bottom: 6px; border-bottom: 1px solid #ddd;",
+          style = paste0("border: 2px solid ", border_color, "; border-radius: 6px; margin-bottom: 8px; padding: 8px; background: #fafafa;"),
           
-          # Name + RV + Grades
+          # MAIN ROW: All info in one row with multiple columns
           div(
-            div(style = "font-weight: bold; font-size: 13px;", paste0(profile$name, " (", profile$hand, ")")),
-            div(style = paste0("font-size: 10px; font-weight: bold; color: ", border_color, ";"), 
-                paste0("n=", profile$n, " | RV: ", sprintf("%+.2f", rv))),
-            # Compact grades
-            div(style = "display: flex; gap: 2px; margin-top: 2px;",
-                span(style = paste0("background: ", grade_color(profile$rhp_power), "; padding: 2px 4px; border-radius: 2px; font-size: 9px; font-weight: bold;"), paste0("vR:", profile$rhp_power)),
-                span(style = paste0("background: ", grade_color(profile$lhp_power), "; padding: 2px 4px; border-radius: 2px; font-size: 9px; font-weight: bold;"), paste0("vL:", profile$lhp_power))
+            style = "display: grid; grid-template-columns: 180px 1fr 1fr 1fr 280px; gap: 8px; align-items: start;",
+            
+            # COL 1: Name, Profile Info, Grades
+            div(
+              style = "border-right: 1px solid #ddd; padding-right: 8px;",
+              # Header with name
+              div(style = "font-weight: bold; font-size: 14px; color: black; border-bottom: 1px solid #006F71; padding-bottom: 4px; margin-bottom: 6px;", 
+                  "Game Cards"),
+              # Name box
+              div(style = paste0("border: 2px solid ", border_color, "; padding: 6px; border-radius: 4px; margin-bottom: 6px; background: white;"),
+                  div(style = "font-weight: bold; font-size: 13px;", paste0(profile$name, " (", profile$hand, ")")),
+                  # First Pitch / Two Strike / Punishes
+                  div(style = "display: grid; grid-template-columns: auto 1fr; gap: 2px 6px; font-size: 9px; margin-top: 4px;",
+                      div(style = "font-weight: bold;", "First Pitch"),
+                      div(style = paste0("background: ", if (profile$aggro_1p == "Aggressive") "#FC8D59" else if (profile$aggro_1p == "Patient") "#91CF60" else "#E0E0E0", "; padding: 1px 4px; border-radius: 2px; font-weight: bold; text-align: center;"), 
+                          paste0(profile$aggro_1p, " 1P")),
+                      div(style = "font-weight: bold;", "Two Strike"),
+                      div(style = paste0("background: ", if (profile$chase_2k == "High") "#FC8D59" else if (profile$chase_2k == "Low") "#91CF60" else "#E0E0E0", "; padding: 1px 4px; border-radius: 2px; font-weight: bold; text-align: center;"), 
+                          paste0(substr(profile$chase_2k, 1, 4), " 2K Chase")),
+                      div(style = "font-weight: bold;", "Punishes"),
+                      div(style = "font-size: 8px;", if(length(profile$punishes) > 0) profile$punishes[1] else "—")
+                  )
+              ),
+              # Hitter Profile grades
+              div(style = "border: 1px solid #ddd; padding: 4px; border-radius: 3px; background: white;",
+                  div(style = "font-weight: bold; font-size: 10px; margin-bottom: 3px; text-decoration: underline;", "Hitter Profile"),
+                  div(style = "display: grid; grid-template-columns: auto 1fr 1fr; gap: 2px; font-size: 8px;",
+                      div(), div(style = "text-align: center; font-weight: bold;", "Power"), div(style = "text-align: center; font-weight: bold;", "Contact"),
+                      div(style = "font-weight: bold;", paste0(profile$rhp_power, " Grade Power")),
+                      div(style = paste0("background: ", grade_color(profile$rhp_power), "; text-align: center; border-radius: 2px;"), profile$rhp_power),
+                      div(style = paste0("background: ", grade_color(profile$rhp_contact), "; text-align: center; border-radius: 2px;"), profile$rhp_contact)
+                  ),
+                  div(style = "font-size: 8px; margin-top: 3px;",
+                      div(style = "display: flex; justify-content: space-between;",
+                          span("Average Zone"),
+                          span(style = paste0("font-weight: bold; color: ", if (profile$zone_aggro == "Aggressive") "#D73027" else if (profile$zone_aggro == "Passive") "#1A9850" else "#666", ";"), profile$zone_aggro)
+                      ),
+                      div(style = "display: flex; justify-content: space-between;",
+                          span("Aggressiveness"),
+                          span(style = paste0("font-weight: bold; color: ", if (profile$chase_2k == "High") "#D73027" else if (profile$chase_2k == "Low") "#1A9850" else "#666", ";"), 
+                               if (profile$chase_2k == "High") "High Chase" else if (profile$chase_2k == "Low") "Low Chase" else "Average")
+                      )
+                  )
+              )
+            ),
+            
+            # COL 2: Fastball Heatmaps (Power on BIP, Swing Decisions)
+            div(
+              style = "text-align: center;",
+              div(style = "display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 8px; font-weight: bold; margin-bottom: 2px;",
+                  div("Fastball", br(), "(SI, FC)", br(), "Power on BIP"),
+                  div("Fastball", br(), "(SI, FC)", br(), "Swing Decisions")
+              ),
+              div(style = "display: grid; grid-template-columns: 1fr 1fr; gap: 4px;",
+                  plotOutput(paste0("card_hm_fb_dmg_", safe_name), height = "70px"),
+                  plotOutput(paste0("card_hm_fb_whiff_", safe_name), height = "70px")
+              )
+            ),
+            
+            # COL 3: Breaking Heatmaps (Power on BIP, Swing Decisions)
+            div(
+              style = "text-align: center;",
+              div(style = "display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 8px; font-weight: bold; margin-bottom: 2px;",
+                  div("Breaking", br(), "(SL, CU)", br(), "Power on BIP"),
+                  div("Breaking", br(), "(SL, CU)", br(), "Swing Decisions")
+              ),
+              div(style = "display: grid; grid-template-columns: 1fr 1fr; gap: 4px;",
+                  plotOutput(paste0("card_hm_bb_dmg_", safe_name), height = "70px"),
+                  plotOutput(paste0("card_hm_bb_whiff_", safe_name), height = "70px")
+              )
+            ),
+            
+            # COL 4: Movement Plots (vs RHP/LHP) and Spray by Count
+            div(
+              style = "text-align: center;",
+              # Movement header and plots
+              div(style = "font-size: 8px; font-weight: bold; margin-bottom: 2px;", "vs RHP Movement (red=whiff, green=95+EV)"),
+              div(style = "display: grid; grid-template-columns: 1fr 1fr; gap: 2px;",
+                  div(style = "font-size: 7px; color: #666;", "vs RHP"),
+                  div(style = "font-size: 7px; color: #666;", "vs LHP")
+              ),
+              div(style = "display: grid; grid-template-columns: 1fr 1fr; gap: 2px;",
+                  plotOutput(paste0("card_mvmt_rhp_", safe_name), height = "55px"),
+                  plotOutput(paste0("card_mvmt_lhp_", safe_name), height = "55px")
+              ),
+              # Spray by count
+              div(style = "display: grid; grid-template-columns: 1fr 1fr; gap: 2px; margin-top: 4px;",
+                  div(style = "text-align: center;",
+                      div(style = "font-size: 7px; color: #666;", "0-1 K"),
+                      plotOutput(paste0("card_spray_01k_", safe_name), height = "50px")),
+                  div(style = "text-align: center;",
+                      div(style = "font-size: 7px; color: #666;", "2 K"),
+                      plotOutput(paste0("card_spray_2k_", safe_name), height = "50px"))
+              )
+            ),
+            
+            # COL 5: Pitch Type Stats + Notes
+            div(
+              style = "border-left: 1px solid #ddd; padding-left: 8px;",
+              # vs Pitch Type stats table
+              div(style = "font-size: 9px; font-weight: bold; margin-bottom: 4px;", "vs Pitch Type (SLG | Whiff%)"),
+              div(style = "display: grid; grid-template-columns: 25px 1fr 1fr; gap: 2px; font-size: 8px; margin-bottom: 8px;",
+                  div(style = "color: #FA8072; font-weight: bold;", "FB"),
+                  div(style = "text-align: center;", {
+                    fb_rhp <- profile$splits[["RHP_FB"]]$stats
+                    slg <- if (!is.null(fb_rhp$SLG) && !is.na(fb_rhp$SLG)) sprintf(".%03d", round(fb_rhp$SLG * 1000)) else "-"
+                    whiff <- if (!is.null(fb_rhp$Whiff_pct) && !is.na(fb_rhp$Whiff_pct)) sprintf("%.0f%%", fb_rhp$Whiff_pct) else "-"
+                    paste0("R: ", slg, "|", whiff)
+                  }),
+                  div(style = "text-align: center;", {
+                    fb_lhp <- profile$splits[["LHP_FB"]]$stats
+                    slg <- if (!is.null(fb_lhp$SLG) && !is.na(fb_lhp$SLG)) sprintf(".%03d", round(fb_lhp$SLG * 1000)) else "-"
+                    whiff <- if (!is.null(fb_lhp$Whiff_pct) && !is.na(fb_lhp$Whiff_pct)) sprintf("%.0f%%", fb_lhp$Whiff_pct) else "-"
+                    paste0("L: ", slg, "|", whiff)
+                  }),
+                  div(style = "color: #A020F0; font-weight: bold;", "BB"),
+                  div(style = "text-align: center;", {
+                    bb_rhp <- profile$splits[["RHP_BB"]]$stats
+                    slg <- if (!is.null(bb_rhp$SLG) && !is.na(bb_rhp$SLG)) sprintf(".%03d", round(bb_rhp$SLG * 1000)) else "-"
+                    whiff <- if (!is.null(bb_rhp$Whiff_pct) && !is.na(bb_rhp$Whiff_pct)) sprintf("%.0f%%", bb_rhp$Whiff_pct) else "-"
+                    paste0("R: ", slg, "|", whiff)
+                  }),
+                  div(style = "text-align: center;", {
+                    bb_lhp <- profile$splits[["LHP_BB"]]$stats
+                    slg <- if (!is.null(bb_lhp$SLG) && !is.na(bb_lhp$SLG)) sprintf(".%03d", round(bb_lhp$SLG * 1000)) else "-"
+                    whiff <- if (!is.null(bb_lhp$Whiff_pct) && !is.na(bb_lhp$Whiff_pct)) sprintf("%.0f%%", bb_lhp$Whiff_pct) else "-"
+                    paste0("L: ", slg, "|", whiff)
+                  }),
+                  div(style = "color: #2E8B57; font-weight: bold;", "OS"),
+                  div(style = "text-align: center;", {
+                    os_rhp <- profile$splits[["RHP_OS"]]$stats
+                    slg <- if (!is.null(os_rhp$SLG) && !is.na(os_rhp$SLG)) sprintf(".%03d", round(os_rhp$SLG * 1000)) else "-"
+                    whiff <- if (!is.null(os_rhp$Whiff_pct) && !is.na(os_rhp$Whiff_pct)) sprintf("%.0f%%", os_rhp$Whiff_pct) else "-"
+                    paste0("R: ", slg, "|", whiff)
+                  }),
+                  div(style = "text-align: center;", {
+                    os_lhp <- profile$splits[["LHP_OS"]]$stats
+                    slg <- if (!is.null(os_lhp$SLG) && !is.na(os_lhp$SLG)) sprintf(".%03d", round(os_lhp$SLG * 1000)) else "-"
+                    whiff <- if (!is.null(os_lhp$Whiff_pct) && !is.na(os_lhp$Whiff_pct)) sprintf("%.0f%%", os_lhp$Whiff_pct) else "-"
+                    paste0("L: ", slg, "|", whiff)
+                  })
+              ),
+              # In-game notes
+              div(style = "font-weight: bold; font-size: 9px; color: #006F71;", "In game notes:"),
+              tags$textarea(style = "width: 100%; height: 45px; font-size: 9px; border: 1px solid #ccc; border-radius: 3px; padding: 3px; resize: none;", 
+                            placeholder = "Notes...")
             )
           ),
           
-          # Key Stats (compact)
+          # ROW 2: Pitch Plan boxes (smaller for one-row format)
           div(
-            style = "display: flex; gap: 3px; flex-wrap: wrap; font-size: 9px;",
-            span(style = paste0("background: ", stat_badge_color(rs$whiff, "whiff", TRUE), "; padding: 2px 4px; border-radius: 2px; font-weight: bold;"), 
-                 paste0("Whiff:", if (!is.na(rs$whiff)) paste0(round(rs$whiff, 0), "%") else "—")),
-            span(style = paste0("background: ", stat_badge_color(rs$chase, "chase", TRUE), "; padding: 2px 4px; border-radius: 2px; font-weight: bold;"), 
-                 paste0("Ch:", if (!is.na(rs$chase)) paste0(round(rs$chase, 0), "%") else "—")),
-            span(style = paste0("background: ", stat_badge_color(rs$chase_2k, "chase_2k", TRUE), "; padding: 2px 4px; border-radius: 2px; font-weight: bold;"), 
-                 paste0("2K:", if (!is.na(rs$chase_2k)) paste0(round(rs$chase_2k, 0), "%") else "—")),
-            span(style = paste0("background: ", stat_badge_color(rs$k_pct, "k_pct", TRUE), "; padding: 2px 4px; border-radius: 2px; font-weight: bold;"), 
-                 paste0("K:", if (!is.na(rs$k_pct)) paste0(round(rs$k_pct, 0), "%") else "—")),
-            # Behavior badges
-            span(style = paste0("background: ", if (profile$aggro_1p == "Aggressive") "#FC8D59" else if (profile$aggro_1p == "Patient") "#91CF60" else "#E0E0E0", 
-                                "; padding: 2px 4px; border-radius: 2px; font-weight: bold;"), 
-                 paste0(substr(profile$aggro_1p, 1, 3), "1P")),
-            span(style = paste0("background: ", if (profile$chase_2k == "High") "#FC8D59" else if (profile$chase_2k == "Low") "#91CF60" else "#E0E0E0", 
-                                "; padding: 2px 4px; border-radius: 2px; font-weight: bold;"), 
-                 paste0(substr(profile$chase_2k, 1, 2), "2K"))
-          ),
-          
-          # Punish/Struggle
-          div(style = "font-size: 9px;",
-              div(style = "color: #1A9850;", strong("✓"), " ", punishes_text),
-              div(style = "color: #D73027;", strong("✗"), " ", struggles_text)
-          )
-        ),
-        
-        # ROW 2: IN-GAME NOTES (emphasized - this is the main purpose)
-        div(
-          style = "margin-top: 6px; display: grid; grid-template-columns: 100px 1fr; gap: 8px;",
-          
-          # Pitch Plan
-          div(
-            div(style = "font-size: 9px; font-weight: bold; color: #006F71;", "Pitch Plan:"),
-            tags$textarea(style = "width: 100%; height: 40px; font-size: 10px; border: 1px solid #ccc; border-radius: 3px; padding: 3px; resize: none;", 
-                          placeholder = "FB early, BB 2K...")
-          ),
-          
-          # AB Notes with diamonds
-          div(
-            div(style = "font-size: 9px; font-weight: bold; color: #006F71; margin-bottom: 2px;", "In Game Notes:"),
-            div(style = "display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px;",
-                lapply(1:5, function(i) {
-                  div(style = "text-align: center;",
-                      div(style = "font-weight: bold; font-size: 11px;", i),
-                      tags$input(type = "text", style = "width: 90%; font-size: 8px; border: 1px solid #ccc; border-radius: 2px; padding: 1px; margin-bottom: 2px;", placeholder = "P:"),
-                      tags$svg(width = "30", height = "30", viewBox = "0 0 30 30",
-                               tags$polygon(points = "15,3 27,15 15,27 3,15", fill = "white", stroke = "#888", `stroke-width` = "1")),
-                      div(style = "border: 1px solid #aaa; height: 28px; border-radius: 2px; background: white; margin-top: 2px;")
-                  )
-                })
+            style = "margin-top: 6px; padding-top: 6px; border-top: 1px solid #ddd; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;",
+            div(
+              div(style = "font-weight: bold; font-size: 9px; color: #006F71;", "Pitch Plan"),
+              tags$textarea(style = "width: 100%; height: 30px; font-size: 9px; border: 1px solid #ccc; border-radius: 3px; padding: 3px; resize: none;", 
+                            placeholder = "Overall approach...")
+            ),
+            div(
+              div(style = "font-weight: bold; font-size: 9px; color: #e65100;", "vs RHP"),
+              tags$textarea(style = "width: 100%; height: 30px; font-size: 9px; border: 1px solid #ccc; border-radius: 3px; padding: 3px; resize: none;", 
+                            placeholder = "Pitch plan vs RHP...")
+            ),
+            div(
+              div(style = "font-weight: bold; font-size: 9px; color: #2e7d32;", "vs LHP"),
+              tags$textarea(style = "width: 100%; height: 30px; font-size: 9px; border: 1px solid #ccc; border-radius: 3px; padding: 3px; resize: none;", 
+                            placeholder = "Pitch plan vs LHP...")
             )
           )
         )
-      )
+        
+      # ============================================================
+      # HALF-PAGE CARD (More detail, 2 per page)
+      # ============================================================
+      } else if (card_format == "half_page") {
+        div(
+          style = paste0("border: 3px solid ", border_color, "; border-radius: 8px; margin-bottom: 15px; padding: 12px; background: #fafafa; min-height: 380px;"),
+          
+          # HEADER ROW
+          div(
+            style = "display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 2px solid #006F71; margin-bottom: 10px;",
+            div(
+              div(style = "font-weight: bold; font-size: 18px; color: black;", paste0(profile$name, " (", profile$hand, ")")),
+              div(style = paste0("font-size: 11px; font-weight: bold; color: ", border_color, ";"), 
+                  paste0("n=", profile$n, " | RV/100: ", sprintf("%+.2f", rv)))
+            ),
+            # Stats badges
+            div(
+              style = "display: flex; gap: 4px; flex-wrap: wrap;",
+              span(style = paste0("background: ", stat_badge_color(rs$ev, "ev"), "; padding: 3px 6px; border-radius: 3px; font-size: 10px; font-weight: bold;"), 
+                   paste0("EV:", if (!is.na(rs$ev)) round(rs$ev, 1) else "—")),
+              span(style = paste0("background: ", stat_badge_color(rs$whiff, "whiff", TRUE), "; padding: 3px 6px; border-radius: 3px; font-size: 10px; font-weight: bold;"), 
+                   paste0("Whiff:", if (!is.na(rs$whiff)) paste0(round(rs$whiff, 1), "%") else "—")),
+              span(style = paste0("background: ", stat_badge_color(rs$chase, "chase", TRUE), "; padding: 3px 6px; border-radius: 3px; font-size: 10px; font-weight: bold;"), 
+                   paste0("Chase:", if (!is.na(rs$chase)) paste0(round(rs$chase, 1), "%") else "—")),
+              span(style = paste0("background: ", stat_badge_color(rs$k_pct, "k_pct", TRUE), "; padding: 3px 6px; border-radius: 3px; font-size: 10px; font-weight: bold;"), 
+                   paste0("K%:", if (!is.na(rs$k_pct)) paste0(round(rs$k_pct, 1), "%") else "—")),
+              span(style = paste0("background: ", if (profile$aggro_1p == "Aggressive") "#FC8D59" else if (profile$aggro_1p == "Patient") "#91CF60" else "#E0E0E0", 
+                                  "; padding: 3px 6px; border-radius: 3px; font-size: 10px; font-weight: bold;"), 
+                   paste0(profile$aggro_1p, " 1P")),
+              span(style = paste0("background: ", if (profile$chase_2k == "High") "#FC8D59" else if (profile$chase_2k == "Low") "#91CF60" else "#E0E0E0", 
+                                  "; padding: 3px 6px; border-radius: 3px; font-size: 10px; font-weight: bold;"), 
+                   paste0(substr(profile$chase_2k, 1, 4), " 2K Ch"))
+            )
+          ),
+          
+          # MAIN CONTENT: 4 columns
+          div(
+            style = "display: grid; grid-template-columns: 200px 1fr 1fr 220px; gap: 10px;",
+            
+            # COL 1: Profile Info + Grades + Pitch Stats
+            div(
+              # Punish/Struggle
+              div(style = "background: white; padding: 6px; border-radius: 4px; margin-bottom: 8px; border: 1px solid #ddd;",
+                  div(style = "color: #1A9850; font-weight: bold; font-size: 11px;", "✓ Punishes: ", 
+                      span(style = "font-weight: normal;", punishes_text)),
+                  div(style = "color: #D73027; font-weight: bold; font-size: 11px; margin-top: 3px;", "✗ Struggles: ", 
+                      span(style = "font-weight: normal;", struggles_text))
+              ),
+              # Grades table
+              div(style = "background: white; padding: 6px; border-radius: 4px; margin-bottom: 8px; border: 1px solid #ddd;",
+                  div(style = "font-weight: bold; font-size: 10px; margin-bottom: 4px; color: #006F71;", "Grades (20-80)"),
+                  div(style = "display: grid; grid-template-columns: 35px repeat(5, 1fr); gap: 2px; font-size: 9px;",
+                      div(), div(style = "text-align: center;", "Raw"), div(style = "text-align: center;", "Game"), 
+                      div(style = "text-align: center;", "Con"), div(style = "text-align: center;", "AvK"), div(style = "text-align: center;", "Dec"),
+                      div(style = "font-weight: bold;", "vRHP"),
+                      div(style = paste0("background: ", grade_color(profile$rhp_raw_power), "; text-align: center; padding: 2px; border-radius: 2px; font-weight: bold;"), profile$rhp_raw_power),
+                      div(style = paste0("background: ", grade_color(profile$rhp_power), "; text-align: center; padding: 2px; border-radius: 2px; font-weight: bold;"), profile$rhp_power),
+                      div(style = paste0("background: ", grade_color(profile$rhp_contact), "; text-align: center; padding: 2px; border-radius: 2px; font-weight: bold;"), profile$rhp_contact),
+                      div(style = paste0("background: ", grade_color(profile$rhp_avoid_k), "; text-align: center; padding: 2px; border-radius: 2px; font-weight: bold;"), profile$rhp_avoid_k),
+                      div(style = paste0("background: ", grade_color(profile$rhp_swing_dec), "; text-align: center; padding: 2px; border-radius: 2px; font-weight: bold;"), profile$rhp_swing_dec),
+                      div(style = "font-weight: bold;", "vLHP"),
+                      div(style = paste0("background: ", grade_color(profile$lhp_raw_power), "; text-align: center; padding: 2px; border-radius: 2px; font-weight: bold;"), profile$lhp_raw_power),
+                      div(style = paste0("background: ", grade_color(profile$lhp_power), "; text-align: center; padding: 2px; border-radius: 2px; font-weight: bold;"), profile$lhp_power),
+                      div(style = paste0("background: ", grade_color(profile$lhp_contact), "; text-align: center; padding: 2px; border-radius: 2px; font-weight: bold;"), profile$lhp_contact),
+                      div(style = paste0("background: ", grade_color(profile$lhp_avoid_k), "; text-align: center; padding: 2px; border-radius: 2px; font-weight: bold;"), profile$lhp_avoid_k),
+                      div(style = paste0("background: ", grade_color(profile$lhp_swing_dec), "; text-align: center; padding: 2px; border-radius: 2px; font-weight: bold;"), profile$lhp_swing_dec)
+                  )
+              ),
+              # Pitch Type Stats
+              div(style = "font-size: 9px; font-weight: bold; margin-bottom: 3px;", "vs Pitch Type (SLG | Whiff%)"),
+              div(style = "display: grid; grid-template-columns: 25px 1fr 1fr; gap: 2px; font-size: 8px;",
+                  div(style = "color: #FA8072; font-weight: bold;", "FB"),
+                  div({
+                    fb_rhp <- profile$splits[["RHP_FB"]]$stats
+                    slg <- if (!is.null(fb_rhp$SLG) && !is.na(fb_rhp$SLG)) sprintf(".%03d", round(fb_rhp$SLG * 1000)) else "-"
+                    whiff <- if (!is.null(fb_rhp$Whiff_pct) && !is.na(fb_rhp$Whiff_pct)) sprintf("%.0f%%", fb_rhp$Whiff_pct) else "-"
+                    paste0("R: ", slg, "|", whiff)
+                  }),
+                  div({
+                    fb_lhp <- profile$splits[["LHP_FB"]]$stats
+                    slg <- if (!is.null(fb_lhp$SLG) && !is.na(fb_lhp$SLG)) sprintf(".%03d", round(fb_lhp$SLG * 1000)) else "-"
+                    whiff <- if (!is.null(fb_lhp$Whiff_pct) && !is.na(fb_lhp$Whiff_pct)) sprintf("%.0f%%", fb_lhp$Whiff_pct) else "-"
+                    paste0("L: ", slg, "|", whiff)
+                  }),
+                  div(style = "color: #A020F0; font-weight: bold;", "BB"),
+                  div({
+                    bb_rhp <- profile$splits[["RHP_BB"]]$stats
+                    slg <- if (!is.null(bb_rhp$SLG) && !is.na(bb_rhp$SLG)) sprintf(".%03d", round(bb_rhp$SLG * 1000)) else "-"
+                    whiff <- if (!is.null(bb_rhp$Whiff_pct) && !is.na(bb_rhp$Whiff_pct)) sprintf("%.0f%%", bb_rhp$Whiff_pct) else "-"
+                    paste0("R: ", slg, "|", whiff)
+                  }),
+                  div({
+                    bb_lhp <- profile$splits[["LHP_BB"]]$stats
+                    slg <- if (!is.null(bb_lhp$SLG) && !is.na(bb_lhp$SLG)) sprintf(".%03d", round(bb_lhp$SLG * 1000)) else "-"
+                    whiff <- if (!is.null(bb_lhp$Whiff_pct) && !is.na(bb_lhp$Whiff_pct)) sprintf("%.0f%%", bb_lhp$Whiff_pct) else "-"
+                    paste0("L: ", slg, "|", whiff)
+                  }),
+                  div(style = "color: #2E8B57; font-weight: bold;", "OS"),
+                  div({
+                    os_rhp <- profile$splits[["RHP_OS"]]$stats
+                    slg <- if (!is.null(os_rhp$SLG) && !is.na(os_rhp$SLG)) sprintf(".%03d", round(os_rhp$SLG * 1000)) else "-"
+                    whiff <- if (!is.null(os_rhp$Whiff_pct) && !is.na(os_rhp$Whiff_pct)) sprintf("%.0f%%", os_rhp$Whiff_pct) else "-"
+                    paste0("R: ", slg, "|", whiff)
+                  }),
+                  div({
+                    os_lhp <- profile$splits[["LHP_OS"]]$stats
+                    slg <- if (!is.null(os_lhp$SLG) && !is.na(os_lhp$SLG)) sprintf(".%03d", round(os_lhp$SLG * 1000)) else "-"
+                    whiff <- if (!is.null(os_lhp$Whiff_pct) && !is.na(os_lhp$Whiff_pct)) sprintf("%.0f%%", os_lhp$Whiff_pct) else "-"
+                    paste0("L: ", slg, "|", whiff)
+                  })
+              )
+            ),
+            
+            # COL 2: vs RHP Heatmaps
+            div(
+              style = "background: white; padding: 6px; border-radius: 4px;",
+              div(style = "font-weight: bold; font-size: 10px; text-align: center; margin-bottom: 4px; color: #e65100;", "vs RHP"),
+              div(style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px;",
+                  div(style = "text-align: center;", div(style = "font-size: 7px; color: #FA8072; font-weight: bold;", "FB Whiff"), plotOutput(paste0("half_hm_rhp_fb_", safe_name), height = "80px")),
+                  div(style = "text-align: center;", div(style = "font-size: 7px; color: #A020F0; font-weight: bold;", "BB Whiff"), plotOutput(paste0("half_hm_rhp_bb_", safe_name), height = "80px")),
+                  div(style = "text-align: center;", div(style = "font-size: 7px; color: #2E8B57; font-weight: bold;", "OS Whiff"), plotOutput(paste0("half_hm_rhp_os_", safe_name), height = "80px"))
+              ),
+              # Movement plots
+              div(style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; margin-top: 4px;",
+                  div(style = "text-align: center;", div(style = "font-size: 7px;", "FB Move"), plotOutput(paste0("half_mv_rhp_fb_", safe_name), height = "75px")),
+                  div(style = "text-align: center;", div(style = "font-size: 7px;", "BB Move"), plotOutput(paste0("half_mv_rhp_bb_", safe_name), height = "75px")),
+                  div(style = "text-align: center;", div(style = "font-size: 7px;", "OS Move"), plotOutput(paste0("half_mv_rhp_os_", safe_name), height = "75px"))
+              )
+            ),
+            
+            # COL 3: vs LHP Heatmaps
+            div(
+              style = "background: white; padding: 6px; border-radius: 4px;",
+              div(style = "font-weight: bold; font-size: 10px; text-align: center; margin-bottom: 4px; color: #2e7d32;", "vs LHP"),
+              div(style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px;",
+                  div(style = "text-align: center;", div(style = "font-size: 7px; color: #FA8072; font-weight: bold;", "FB Whiff"), plotOutput(paste0("half_hm_lhp_fb_", safe_name), height = "80px")),
+                  div(style = "text-align: center;", div(style = "font-size: 7px; color: #A020F0; font-weight: bold;", "BB Whiff"), plotOutput(paste0("half_hm_lhp_bb_", safe_name), height = "80px")),
+                  div(style = "text-align: center;", div(style = "font-size: 7px; color: #2E8B57; font-weight: bold;", "OS Whiff"), plotOutput(paste0("half_hm_lhp_os_", safe_name), height = "80px"))
+              ),
+              # Movement plots
+              div(style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; margin-top: 4px;",
+                  div(style = "text-align: center;", div(style = "font-size: 7px;", "FB Move"), plotOutput(paste0("half_mv_lhp_fb_", safe_name), height = "75px")),
+                  div(style = "text-align: center;", div(style = "font-size: 7px;", "BB Move"), plotOutput(paste0("half_mv_lhp_bb_", safe_name), height = "75px")),
+                  div(style = "text-align: center;", div(style = "font-size: 7px;", "OS Move"), plotOutput(paste0("half_mv_lhp_os_", safe_name), height = "75px"))
+              )
+            ),
+            
+            # COL 4: Notes section
+            div(
+              div(style = "font-weight: bold; font-size: 11px; color: #006F71; margin-bottom: 6px;", "Pitch Plan"),
+              div(
+                div(style = "font-size: 9px; font-weight: bold;", "Overall:"),
+                tags$textarea(style = "width: 100%; height: 50px; font-size: 10px; border: 1px solid #ccc; border-radius: 3px; padding: 4px; resize: none; margin-bottom: 6px;", 
+                              placeholder = "Overall approach...")
+              ),
+              div(
+                div(style = "font-size: 9px; font-weight: bold; color: #e65100;", "vs RHP:"),
+                tags$textarea(style = "width: 100%; height: 40px; font-size: 10px; border: 1px solid #ccc; border-radius: 3px; padding: 4px; resize: none; margin-bottom: 6px;", 
+                              placeholder = "vs RHP...")
+              ),
+              div(
+                div(style = "font-size: 9px; font-weight: bold; color: #2e7d32;", "vs LHP:"),
+                tags$textarea(style = "width: 100%; height: 40px; font-size: 10px; border: 1px solid #ccc; border-radius: 3px; padding: 4px; resize: none;", 
+                              placeholder = "vs LHP...")
+              )
+            )
+          )
+        )
+        
+      # ============================================================
+      # FULL-PAGE CARD (Maximum detail)
+      # ============================================================
+      } else {
+        div(
+          style = paste0("border: 3px solid ", border_color, "; border-radius: 10px; margin-bottom: 20px; padding: 15px; background: #fafafa; min-height: 700px;"),
+          
+          # HEADER - Large and prominent
+          div(
+            style = "background: linear-gradient(135deg, #006F71, #00897b); padding: 12px; border-radius: 8px; margin-bottom: 12px;",
+            div(
+              style = "display: flex; justify-content: space-between; align-items: center;",
+              div(
+                h2(style = "color: white; margin: 0;", paste0(profile$name, " (", profile$hand, ")")),
+                span(style = "color: white; font-size: 13px;", paste0("n=", profile$n, " | RV/100: ", sprintf("%+.2f", rv)))
+              ),
+              # Performance badges
+              div(
+                style = "display: flex; gap: 6px; flex-wrap: wrap;",
+                span(style = paste0("background: ", stat_badge_color(rs$ev, "ev"), "; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;"), 
+                     paste0("EV:", if (!is.na(rs$ev)) round(rs$ev, 1) else "—")),
+                span(style = paste0("background: ", stat_badge_color(rs$ev90, "ev90"), "; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;"), 
+                     paste0("EV90:", if (!is.na(rs$ev90)) round(rs$ev90, 1) else "—")),
+                span(style = paste0("background: ", stat_badge_color(rs$whiff, "whiff", TRUE), "; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;"), 
+                     paste0("Whiff:", if (!is.na(rs$whiff)) paste0(round(rs$whiff, 1), "%") else "—")),
+                span(style = paste0("background: ", stat_badge_color(rs$chase, "chase", TRUE), "; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;"), 
+                     paste0("Chase:", if (!is.na(rs$chase)) paste0(round(rs$chase, 1), "%") else "—")),
+                span(style = paste0("background: ", stat_badge_color(rs$k_pct, "k_pct", TRUE), "; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;"), 
+                     paste0("K%:", if (!is.na(rs$k_pct)) paste0(round(rs$k_pct, 1), "%") else "—")),
+                span(style = paste0("background: ", stat_badge_color(rs$bb_pct, "bb_pct"), "; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;"), 
+                     paste0("BB%:", if (!is.na(rs$bb_pct)) paste0(round(rs$bb_pct, 1), "%") else "—")),
+                span(style = paste0("background: ", if (profile$aggro_1p == "Aggressive") "#FC8D59" else if (profile$aggro_1p == "Patient") "#91CF60" else "#E0E0E0", 
+                                    "; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;"), 
+                     paste0(profile$aggro_1p, " 1P")),
+                span(style = paste0("background: ", if (profile$chase_2k == "High") "#FC8D59" else if (profile$chase_2k == "Low") "#91CF60" else "#E0E0E0", 
+                                    "; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;"), 
+                     paste0(substr(profile$chase_2k, 1, 4), " 2K"))
+              )
+            )
+          ),
+          
+          # ROW 1: Profile + Grades + Spray Charts
+          div(
+            style = "display: grid; grid-template-columns: 250px 1fr 250px; gap: 12px; margin-bottom: 12px;",
+            
+            # Punish/Struggle + Grades
+            div(
+              div(style = "background: white; padding: 10px; border-radius: 6px; margin-bottom: 10px; border: 1px solid #ddd;",
+                  div(style = "color: #1A9850; font-weight: bold; font-size: 12px;", "✓ Punishes: ", 
+                      span(style = "font-weight: normal;", punishes_text)),
+                  div(style = "color: #D73027; font-weight: bold; font-size: 12px; margin-top: 6px;", "✗ Struggles: ", 
+                      span(style = "font-weight: normal;", struggles_text))
+              ),
+              div(style = "background: white; padding: 10px; border-radius: 6px; border: 1px solid #ddd;",
+                  div(style = "font-weight: bold; font-size: 12px; margin-bottom: 6px; color: #006F71;", "Grades (20-80 Scale)"),
+                  div(style = "display: grid; grid-template-columns: 40px repeat(5, 1fr); gap: 3px; font-size: 10px;",
+                      div(), div(style = "text-align: center;", "Raw"), div(style = "text-align: center;", "Game"), 
+                      div(style = "text-align: center;", "Con"), div(style = "text-align: center;", "AvK"), div(style = "text-align: center;", "Dec"),
+                      div(style = "font-weight: bold; color: #e65100;", "vRHP"),
+                      div(style = paste0("background: ", grade_color(profile$rhp_raw_power), "; text-align: center; padding: 3px; border-radius: 3px; font-weight: bold;"), profile$rhp_raw_power),
+                      div(style = paste0("background: ", grade_color(profile$rhp_power), "; text-align: center; padding: 3px; border-radius: 3px; font-weight: bold;"), profile$rhp_power),
+                      div(style = paste0("background: ", grade_color(profile$rhp_contact), "; text-align: center; padding: 3px; border-radius: 3px; font-weight: bold;"), profile$rhp_contact),
+                      div(style = paste0("background: ", grade_color(profile$rhp_avoid_k), "; text-align: center; padding: 3px; border-radius: 3px; font-weight: bold;"), profile$rhp_avoid_k),
+                      div(style = paste0("background: ", grade_color(profile$rhp_swing_dec), "; text-align: center; padding: 3px; border-radius: 3px; font-weight: bold;"), profile$rhp_swing_dec),
+                      div(style = "font-weight: bold; color: #2e7d32;", "vLHP"),
+                      div(style = paste0("background: ", grade_color(profile$lhp_raw_power), "; text-align: center; padding: 3px; border-radius: 3px; font-weight: bold;"), profile$lhp_raw_power),
+                      div(style = paste0("background: ", grade_color(profile$lhp_power), "; text-align: center; padding: 3px; border-radius: 3px; font-weight: bold;"), profile$lhp_power),
+                      div(style = paste0("background: ", grade_color(profile$lhp_contact), "; text-align: center; padding: 3px; border-radius: 3px; font-weight: bold;"), profile$lhp_contact),
+                      div(style = paste0("background: ", grade_color(profile$lhp_avoid_k), "; text-align: center; padding: 3px; border-radius: 3px; font-weight: bold;"), profile$lhp_avoid_k),
+                      div(style = paste0("background: ", grade_color(profile$lhp_swing_dec), "; text-align: center; padding: 3px; border-radius: 3px; font-weight: bold;"), profile$lhp_swing_dec)
+                  )
+              )
+            ),
+            
+            # Pitch Type Stats
+            div(
+              style = "background: white; padding: 10px; border-radius: 6px; border: 1px solid #ddd;",
+              div(style = "font-weight: bold; font-size: 12px; margin-bottom: 6px; color: #006F71;", "vs Pitch Type (SLG | Whiff%)"),
+              div(style = "display: grid; grid-template-columns: 40px 1fr 1fr; gap: 4px; font-size: 11px;",
+                  div(style = "color: #FA8072; font-weight: bold;", "FB"),
+                  div({
+                    fb_rhp <- profile$splits[["RHP_FB"]]$stats
+                    slg <- if (!is.null(fb_rhp$SLG) && !is.na(fb_rhp$SLG)) sprintf(".%03d", round(fb_rhp$SLG * 1000)) else "-"
+                    whiff <- if (!is.null(fb_rhp$Whiff_pct) && !is.na(fb_rhp$Whiff_pct)) sprintf("%.0f%%", fb_rhp$Whiff_pct) else "-"
+                    paste0("vs RHP: ", slg, " | ", whiff)
+                  }),
+                  div({
+                    fb_lhp <- profile$splits[["LHP_FB"]]$stats
+                    slg <- if (!is.null(fb_lhp$SLG) && !is.na(fb_lhp$SLG)) sprintf(".%03d", round(fb_lhp$SLG * 1000)) else "-"
+                    whiff <- if (!is.null(fb_lhp$Whiff_pct) && !is.na(fb_lhp$Whiff_pct)) sprintf("%.0f%%", fb_lhp$Whiff_pct) else "-"
+                    paste0("vs LHP: ", slg, " | ", whiff)
+                  }),
+                  div(style = "color: #A020F0; font-weight: bold;", "BB"),
+                  div({
+                    bb_rhp <- profile$splits[["RHP_BB"]]$stats
+                    slg <- if (!is.null(bb_rhp$SLG) && !is.na(bb_rhp$SLG)) sprintf(".%03d", round(bb_rhp$SLG * 1000)) else "-"
+                    whiff <- if (!is.null(bb_rhp$Whiff_pct) && !is.na(bb_rhp$Whiff_pct)) sprintf("%.0f%%", bb_rhp$Whiff_pct) else "-"
+                    paste0("vs RHP: ", slg, " | ", whiff)
+                  }),
+                  div({
+                    bb_lhp <- profile$splits[["LHP_BB"]]$stats
+                    slg <- if (!is.null(bb_lhp$SLG) && !is.na(bb_lhp$SLG)) sprintf(".%03d", round(bb_lhp$SLG * 1000)) else "-"
+                    whiff <- if (!is.null(bb_lhp$Whiff_pct) && !is.na(bb_lhp$Whiff_pct)) sprintf("%.0f%%", bb_lhp$Whiff_pct) else "-"
+                    paste0("vs LHP: ", slg, " | ", whiff)
+                  }),
+                  div(style = "color: #2E8B57; font-weight: bold;", "OS"),
+                  div({
+                    os_rhp <- profile$splits[["RHP_OS"]]$stats
+                    slg <- if (!is.null(os_rhp$SLG) && !is.na(os_rhp$SLG)) sprintf(".%03d", round(os_rhp$SLG * 1000)) else "-"
+                    whiff <- if (!is.null(os_rhp$Whiff_pct) && !is.na(os_rhp$Whiff_pct)) sprintf("%.0f%%", os_rhp$Whiff_pct) else "-"
+                    paste0("vs RHP: ", slg, " | ", whiff)
+                  }),
+                  div({
+                    os_lhp <- profile$splits[["LHP_OS"]]$stats
+                    slg <- if (!is.null(os_lhp$SLG) && !is.na(os_lhp$SLG)) sprintf(".%03d", round(os_lhp$SLG * 1000)) else "-"
+                    whiff <- if (!is.null(os_lhp$Whiff_pct) && !is.na(os_lhp$Whiff_pct)) sprintf("%.0f%%", os_lhp$Whiff_pct) else "-"
+                    paste0("vs LHP: ", slg, " | ", whiff)
+                  })
+              )
+            ),
+            
+            # Spray Charts
+            div(
+              style = "background: white; padding: 8px; border-radius: 6px; border: 1px solid #ddd;",
+              div(style = "font-weight: bold; font-size: 11px; text-align: center; margin-bottom: 4px;", "Spray Charts"),
+              div(style = "display: grid; grid-template-columns: 1fr 1fr; gap: 4px;",
+                  div(style = "text-align: center;", div(style = "font-size: 9px;", "vs RHP"), plotOutput(paste0("full_spray_rhp_", safe_name), height = "90px")),
+                  div(style = "text-align: center;", div(style = "font-size: 9px;", "vs LHP"), plotOutput(paste0("full_spray_lhp_", safe_name), height = "90px"))
+              )
+            )
+          ),
+          
+          # ROW 2: Heatmaps and Movement
+          div(
+            style = "display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;",
+            
+            # vs RHP Section
+            div(
+              style = "background: white; padding: 10px; border-radius: 6px; border: 1px solid #ddd;",
+              div(style = "font-weight: bold; font-size: 13px; text-align: center; color: #e65100; margin-bottom: 8px;", "vs RHP"),
+              # Heatmaps
+              div(style = "font-size: 10px; font-weight: bold; margin-bottom: 4px;", "Whiff Heatmaps (blue=whiff)"),
+              div(style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 8px;",
+                  div(style = "text-align: center;", div(style = "font-size: 9px; color: #FA8072; font-weight: bold;", "FB"), plotOutput(paste0("full_whiff_rhp_fb_", safe_name), height = "100px")),
+                  div(style = "text-align: center;", div(style = "font-size: 9px; color: #A020F0; font-weight: bold;", "BB"), plotOutput(paste0("full_whiff_rhp_bb_", safe_name), height = "100px")),
+                  div(style = "text-align: center;", div(style = "font-size: 9px; color: #2E8B57; font-weight: bold;", "OS"), plotOutput(paste0("full_whiff_rhp_os_", safe_name), height = "100px"))
+              ),
+              # Movement
+              div(style = "font-size: 10px; font-weight: bold; margin-bottom: 4px;", "Movement (red=whiff, green=95+EV)"),
+              div(style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;",
+                  div(style = "text-align: center;", plotOutput(paste0("full_mv_rhp_fb_", safe_name), height = "100px")),
+                  div(style = "text-align: center;", plotOutput(paste0("full_mv_rhp_bb_", safe_name), height = "100px")),
+                  div(style = "text-align: center;", plotOutput(paste0("full_mv_rhp_os_", safe_name), height = "100px"))
+              )
+            ),
+            
+            # vs LHP Section
+            div(
+              style = "background: white; padding: 10px; border-radius: 6px; border: 1px solid #ddd;",
+              div(style = "font-weight: bold; font-size: 13px; text-align: center; color: #2e7d32; margin-bottom: 8px;", "vs LHP"),
+              # Heatmaps
+              div(style = "font-size: 10px; font-weight: bold; margin-bottom: 4px;", "Whiff Heatmaps (blue=whiff)"),
+              div(style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 8px;",
+                  div(style = "text-align: center;", div(style = "font-size: 9px; color: #FA8072; font-weight: bold;", "FB"), plotOutput(paste0("full_whiff_lhp_fb_", safe_name), height = "100px")),
+                  div(style = "text-align: center;", div(style = "font-size: 9px; color: #A020F0; font-weight: bold;", "BB"), plotOutput(paste0("full_whiff_lhp_bb_", safe_name), height = "100px")),
+                  div(style = "text-align: center;", div(style = "font-size: 9px; color: #2E8B57; font-weight: bold;", "OS"), plotOutput(paste0("full_whiff_lhp_os_", safe_name), height = "100px"))
+              ),
+              # Movement
+              div(style = "font-size: 10px; font-weight: bold; margin-bottom: 4px;", "Movement (red=whiff, green=95+EV)"),
+              div(style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;",
+                  div(style = "text-align: center;", plotOutput(paste0("full_mv_lhp_fb_", safe_name), height = "100px")),
+                  div(style = "text-align: center;", plotOutput(paste0("full_mv_lhp_bb_", safe_name), height = "100px")),
+                  div(style = "text-align: center;", plotOutput(paste0("full_mv_lhp_os_", safe_name), height = "100px"))
+              )
+            )
+          ),
+          
+          # ROW 3: LARGE Notes Section
+          div(
+            style = "display: grid; grid-template-columns: 1fr 2fr; gap: 12px;",
+            
+            # Pitch Plan Notes
+            div(
+              div(style = "font-weight: bold; font-size: 13px; color: #006F71; margin-bottom: 8px;", "Pitch Plan"),
+              div(
+                div(style = "font-weight: bold; font-size: 11px; margin-bottom: 2px;", "Overall Approach:"),
+                tags$textarea(style = "width: 100%; height: 60px; font-size: 11px; border: 1px solid #ccc; border-radius: 4px; padding: 6px; resize: none; margin-bottom: 8px;", 
+                              placeholder = "Overall pitch plan and approach...")
+              ),
+              div(
+                div(style = "font-weight: bold; font-size: 11px; color: #e65100; margin-bottom: 2px;", "vs RHP:"),
+                tags$textarea(style = "width: 100%; height: 50px; font-size: 11px; border: 1px solid #ccc; border-radius: 4px; padding: 6px; resize: none; margin-bottom: 8px;", 
+                              placeholder = "Pitch plan vs RHP...")
+              ),
+              div(
+                div(style = "font-weight: bold; font-size: 11px; color: #2e7d32; margin-bottom: 2px;", "vs LHP:"),
+                tags$textarea(style = "width: 100%; height: 50px; font-size: 11px; border: 1px solid #ccc; border-radius: 4px; padding: 6px; resize: none;", 
+                              placeholder = "Pitch plan vs LHP...")
+              )
+            ),
+            
+            # In-Game Notes with AB boxes
+            div(
+              div(style = "font-weight: bold; font-size: 13px; color: #006F71; margin-bottom: 8px;", "In-Game Notes"),
+              # AB Number row
+              div(style = "display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;",
+                  lapply(1:5, function(i) {
+                    div(style = "text-align: center; background: white; padding: 8px; border: 1px solid #ddd; border-radius: 4px;",
+                        div(style = "font-weight: bold; font-size: 16px; margin-bottom: 4px;", i),
+                        div(style = "font-size: 9px; color: #666; margin-bottom: 4px;", "P:___ I:___"),
+                        tags$svg(width = "50", height = "50", viewBox = "0 0 50 50", style = "margin-bottom: 4px;",
+                                 tags$polygon(points = "25,5 45,25 25,45 5,25", fill = "white", stroke = "#888", `stroke-width` = "1.5")),
+                        tags$textarea(style = "width: 100%; height: 50px; font-size: 10px; border: 1px solid #ccc; border-radius: 3px; padding: 4px; resize: none;", 
+                                      placeholder = "Notes...")
+                    )
+                  })
+              )
+            )
+          )
+        )
+      }
     })
     
     do.call(tagList, card_list)
   })
   
-  # No dynamic plots needed for simple cards - they're just for in-game notes
+  # Dynamic plot outputs for all card formats
+  observe({
+    req(input$hitter_cards_select)
+    
+    for (h_name in input$hitter_cards_select) {
+      local({
+        hitter <- h_name
+        safe_name <- gsub("[^A-Za-z0-9]", "", hitter)
+        
+        # ---- ONE-ROW CARD PLOTS ----
+        # Fastball heatmaps
+        output[[paste0("card_hm_fb_dmg_", safe_name)]] <- renderPlot({
+          create_metric_heatmap(tm_data, hitter, "FB", "Right", "xDamage")
+        }, bg = "transparent")
+        
+        output[[paste0("card_hm_fb_whiff_", safe_name)]] <- renderPlot({
+          create_metric_heatmap(tm_data, hitter, "FB", "Right", "Whiff")
+        }, bg = "transparent")
+        
+        # Breaking heatmaps
+        output[[paste0("card_hm_bb_dmg_", safe_name)]] <- renderPlot({
+          create_metric_heatmap(tm_data, hitter, "BB", "Right", "xDamage")
+        }, bg = "transparent")
+        
+        output[[paste0("card_hm_bb_whiff_", safe_name)]] <- renderPlot({
+          create_metric_heatmap(tm_data, hitter, "BB", "Right", "Whiff")
+        }, bg = "transparent")
+        
+        # Movement plots
+        output[[paste0("card_mvmt_rhp_", safe_name)]] <- renderPlot({
+          create_movement_plot(tm_data, hitter, "Right", "FB")
+        }, bg = "transparent")
+        
+        output[[paste0("card_mvmt_lhp_", safe_name)]] <- renderPlot({
+          create_movement_plot(tm_data, hitter, "Left", "FB")
+        }, bg = "transparent")
+        
+        # Spray charts by count
+        output[[paste0("card_spray_01k_", safe_name)]] <- renderPlot({
+          create_mini_spray(tm_data, hitter, "strikes", "0-1")
+        }, bg = "transparent")
+        
+        output[[paste0("card_spray_2k_", safe_name)]] <- renderPlot({
+          create_mini_spray(tm_data, hitter, "strikes", "2")
+        }, bg = "transparent")
+        
+        # ---- HALF-PAGE CARD PLOTS ----
+        # RHP Heatmaps
+        output[[paste0("half_hm_rhp_fb_", safe_name)]] <- renderPlot({
+          create_metric_heatmap(tm_data, hitter, "FB", "Right", "Whiff")
+        }, bg = "transparent")
+        
+        output[[paste0("half_hm_rhp_bb_", safe_name)]] <- renderPlot({
+          create_metric_heatmap(tm_data, hitter, "BB", "Right", "Whiff")
+        }, bg = "transparent")
+        
+        output[[paste0("half_hm_rhp_os_", safe_name)]] <- renderPlot({
+          create_metric_heatmap(tm_data, hitter, "OS", "Right", "Whiff")
+        }, bg = "transparent")
+        
+        # LHP Heatmaps
+        output[[paste0("half_hm_lhp_fb_", safe_name)]] <- renderPlot({
+          create_metric_heatmap(tm_data, hitter, "FB", "Left", "Whiff")
+        }, bg = "transparent")
+        
+        output[[paste0("half_hm_lhp_bb_", safe_name)]] <- renderPlot({
+          create_metric_heatmap(tm_data, hitter, "BB", "Left", "Whiff")
+        }, bg = "transparent")
+        
+        output[[paste0("half_hm_lhp_os_", safe_name)]] <- renderPlot({
+          create_metric_heatmap(tm_data, hitter, "OS", "Left", "Whiff")
+        }, bg = "transparent")
+        
+        # RHP Movement
+        output[[paste0("half_mv_rhp_fb_", safe_name)]] <- renderPlot({
+          create_movement_plot(tm_data, hitter, "Right", "FB")
+        }, bg = "transparent")
+        
+        output[[paste0("half_mv_rhp_bb_", safe_name)]] <- renderPlot({
+          create_movement_plot(tm_data, hitter, "Right", "BB")
+        }, bg = "transparent")
+        
+        output[[paste0("half_mv_rhp_os_", safe_name)]] <- renderPlot({
+          create_movement_plot(tm_data, hitter, "Right", "OS")
+        }, bg = "transparent")
+        
+        # LHP Movement
+        output[[paste0("half_mv_lhp_fb_", safe_name)]] <- renderPlot({
+          create_movement_plot(tm_data, hitter, "Left", "FB")
+        }, bg = "transparent")
+        
+        output[[paste0("half_mv_lhp_bb_", safe_name)]] <- renderPlot({
+          create_movement_plot(tm_data, hitter, "Left", "BB")
+        }, bg = "transparent")
+        
+        output[[paste0("half_mv_lhp_os_", safe_name)]] <- renderPlot({
+          create_movement_plot(tm_data, hitter, "Left", "OS")
+        }, bg = "transparent")
+        
+        # ---- FULL-PAGE CARD PLOTS ----
+        # Spray charts
+        output[[paste0("full_spray_rhp_", safe_name)]] <- renderPlot({
+          create_mini_spray(tm_data, hitter, "hand", "Right")
+        }, bg = "transparent")
+        
+        output[[paste0("full_spray_lhp_", safe_name)]] <- renderPlot({
+          create_mini_spray(tm_data, hitter, "hand", "Left")
+        }, bg = "transparent")
+        
+        # RHP Whiff Heatmaps
+        output[[paste0("full_whiff_rhp_fb_", safe_name)]] <- renderPlot({
+          create_metric_heatmap(tm_data, hitter, "FB", "Right", "Whiff")
+        }, bg = "transparent")
+        
+        output[[paste0("full_whiff_rhp_bb_", safe_name)]] <- renderPlot({
+          create_metric_heatmap(tm_data, hitter, "BB", "Right", "Whiff")
+        }, bg = "transparent")
+        
+        output[[paste0("full_whiff_rhp_os_", safe_name)]] <- renderPlot({
+          create_metric_heatmap(tm_data, hitter, "OS", "Right", "Whiff")
+        }, bg = "transparent")
+        
+        # LHP Whiff Heatmaps
+        output[[paste0("full_whiff_lhp_fb_", safe_name)]] <- renderPlot({
+          create_metric_heatmap(tm_data, hitter, "FB", "Left", "Whiff")
+        }, bg = "transparent")
+        
+        output[[paste0("full_whiff_lhp_bb_", safe_name)]] <- renderPlot({
+          create_metric_heatmap(tm_data, hitter, "BB", "Left", "Whiff")
+        }, bg = "transparent")
+        
+        output[[paste0("full_whiff_lhp_os_", safe_name)]] <- renderPlot({
+          create_metric_heatmap(tm_data, hitter, "OS", "Left", "Whiff")
+        }, bg = "transparent")
+        
+        # RHP Movement
+        output[[paste0("full_mv_rhp_fb_", safe_name)]] <- renderPlot({
+          create_movement_plot(tm_data, hitter, "Right", "FB")
+        }, bg = "transparent")
+        
+        output[[paste0("full_mv_rhp_bb_", safe_name)]] <- renderPlot({
+          create_movement_plot(tm_data, hitter, "Right", "BB")
+        }, bg = "transparent")
+        
+        output[[paste0("full_mv_rhp_os_", safe_name)]] <- renderPlot({
+          create_movement_plot(tm_data, hitter, "Right", "OS")
+        }, bg = "transparent")
+        
+        # LHP Movement
+        output[[paste0("full_mv_lhp_fb_", safe_name)]] <- renderPlot({
+          create_movement_plot(tm_data, hitter, "Left", "FB")
+        }, bg = "transparent")
+        
+        output[[paste0("full_mv_lhp_bb_", safe_name)]] <- renderPlot({
+          create_movement_plot(tm_data, hitter, "Left", "BB")
+        }, bg = "transparent")
+        
+        output[[paste0("full_mv_lhp_os_", safe_name)]] <- renderPlot({
+          create_movement_plot(tm_data, hitter, "Left", "OS")
+        }, bg = "transparent")
+      })
+    }
+  })
   
-  # Hitter Cards PDF Download - COMPACT cards for game day (9 per page)
+  # Hitter Cards PDF Download - handles all card formats
   output$download_hitter_cards_pdf <- downloadHandler(
     filename = function() {
-      paste0("Hitter_Cards_", format(Sys.Date(), "%Y%m%d"), ".pdf")
+      card_format <- input$card_format
+      format_suffix <- switch(card_format,
+                              "one_row" = "OneRow",
+                              "half_page" = "HalfPage",
+                              "full_page" = "FullPage",
+                              "Cards")
+      paste0("Hitter_", format_suffix, "_", format(Sys.Date(), "%Y%m%d"), ".pdf")
     },
     content = function(file) {
       hitters <- input$hitter_cards_select
+      card_format <- input$card_format
+      if (is.null(card_format)) card_format <- "one_row"
+      
       if (is.null(hitters) || length(hitters) == 0) {
         showNotification("Please select at least one hitter", type = "error")
         return(NULL)
@@ -4805,10 +5480,21 @@ server <- function(input, output, session) {
       
       if (length(dev.list()) > 0) try(dev.off(), silent = TRUE)
       
-      # Portrait letter - fit 9 compact hitters per page
-      pdf(file, width = 8.5, height = 11, paper = "letter")
+      # Set PDF parameters based on card format
+      if (card_format == "one_row") {
+        pdf(file, width = 11, height = 8.5, paper = "letter")  # Landscape for one-row
+        hitters_per_page <- 4
+        card_height <- 0.22
+      } else if (card_format == "half_page") {
+        pdf(file, width = 8.5, height = 11, paper = "letter")  # Portrait
+        hitters_per_page <- 2
+        card_height <- 0.45
+      } else {
+        pdf(file, width = 8.5, height = 11, paper = "letter")  # Portrait - full page
+        hitters_per_page <- 1
+        card_height <- 0.92
+      }
       
-      hitters_per_page <- 9
       n_pages <- ceiling(length(hitters) / hitters_per_page)
       
       for (page in 1:n_pages) {
@@ -4818,17 +5504,15 @@ server <- function(input, output, session) {
         grid::grid.rect(x = 0.5, y = 0.98, width = 1, height = 0.025, just = c("center", "top"),
                         gp = grid::gpar(fill = "#006F71", col = NA))
         grid::grid.text(input$hitter_cards_title, x = 0.5, y = 0.97,
-                        gp = grid::gpar(fontsize = 11, fontface = "bold", col = "white"))
+                        gp = grid::gpar(fontsize = 12, fontface = "bold", col = "white"))
         grid::grid.text(paste0("Page ", page, " of ", n_pages), x = 0.95, y = 0.97, just = "right",
-                        gp = grid::gpar(fontsize = 6, col = "white"))
+                        gp = grid::gpar(fontsize = 7, col = "white"))
         
         # Get hitters for this page
         start_idx <- (page - 1) * hitters_per_page + 1
         end_idx <- min(page * hitters_per_page, length(hitters))
         page_hitters <- hitters[start_idx:end_idx]
         
-        # Each card takes ~0.10 of page height (compact!)
-        card_height <- 0.10
         y_start <- 0.94
         
         for (i in seq_along(page_hitters)) {
@@ -4843,106 +5527,399 @@ server <- function(input, output, session) {
           # Border color
           border_col <- if (rv >= 1.5) "#D73027" else if (rv >= 0.5) "#FC8D59" else if (rv >= -0.5) "#888888" else if (rv >= -1.5) "#91CF60" else "#1A9850"
           
-          # Card background
-          grid::grid.rect(x = 0.5, y = y_top, width = 0.96, height = card_height - 0.005,
-                          just = c("center", "top"),
-                          gp = grid::gpar(fill = "#fafafa", col = border_col, lwd = 1.5))
-          
-          # === ROW 1: Info Row (very compact) ===
-          info_y <- y_top - 0.012
-          
-          # Name + RV
-          grid::grid.text(paste0(profile$name, " (", profile$hand, ")"), x = 0.04, y = info_y,
-                          just = "left", gp = grid::gpar(fontsize = 9, fontface = "bold"))
-          grid::grid.text(paste0("n=", profile$n, " | RV: ", sprintf("%+.2f", rv)), x = 0.04, y = info_y - 0.012,
-                          just = "left", gp = grid::gpar(fontsize = 6, col = border_col, fontface = "bold"))
-          
-          # Compact grades
-          grid::grid.rect(x = 0.22, y = info_y - 0.006, width = 0.035, height = 0.016, just = c("center", "center"),
-                          gp = grid::gpar(fill = grade_color(profile$rhp_power), col = NA))
-          grid::grid.text(paste0("R:", profile$rhp_power), x = 0.22, y = info_y - 0.006, gp = grid::gpar(fontsize = 6, fontface = "bold"))
-          grid::grid.rect(x = 0.26, y = info_y - 0.006, width = 0.035, height = 0.016, just = c("center", "center"),
-                          gp = grid::gpar(fill = grade_color(profile$lhp_power), col = NA))
-          grid::grid.text(paste0("L:", profile$lhp_power), x = 0.26, y = info_y - 0.006, gp = grid::gpar(fontsize = 6, fontface = "bold"))
-          
-          # Key Stats (compact)
-          stats_x <- 0.32
-          stat_labels <- c(
-            paste0("Wh:", if(!is.na(rs$whiff)) paste0(round(rs$whiff, 0), "%") else "-"),
-            paste0("Ch:", if(!is.na(rs$chase)) paste0(round(rs$chase, 0), "%") else "-"),
-            paste0("2K:", if(!is.na(rs$chase_2k)) paste0(round(rs$chase_2k, 0), "%") else "-"),
-            paste0("K:", if(!is.na(rs$k_pct)) paste0(round(rs$k_pct, 0), "%") else "-")
-          )
-          stat_colors <- c(
-            stat_badge_color(rs$whiff, "whiff", TRUE),
-            stat_badge_color(rs$chase, "chase", TRUE),
-            stat_badge_color(rs$chase_2k, "chase_2k", TRUE),
-            stat_badge_color(rs$k_pct, "k_pct", TRUE)
-          )
-          for (j in seq_along(stat_labels)) {
-            x_pos <- stats_x + (j - 1) * 0.055
-            grid::grid.rect(x = x_pos, y = info_y - 0.006, width = 0.05, height = 0.014, just = c("center", "center"),
-                            gp = grid::gpar(fill = stat_colors[j], col = NA))
-            grid::grid.text(stat_labels[j], x = x_pos, y = info_y - 0.006, gp = grid::gpar(fontsize = 5, fontface = "bold"))
-          }
-          
-          # Behavior badges
-          beh_x <- 0.56
-          beh_labels <- c(substr(profile$aggro_1p, 1, 3), substr(profile$chase_2k, 1, 2), substr(profile$zone_aggro, 1, 3))
-          beh_colors <- c(
-            if (profile$aggro_1p == "Aggressive") "#FC8D59" else if (profile$aggro_1p == "Patient") "#91CF60" else "#E0E0E0",
-            if (profile$chase_2k == "High") "#FC8D59" else if (profile$chase_2k == "Low") "#91CF60" else "#E0E0E0",
-            if (profile$zone_aggro == "Aggressive") "#FC8D59" else if (profile$zone_aggro == "Passive") "#91CF60" else "#E0E0E0"
-          )
-          for (j in 1:3) {
-            x_pos <- beh_x + (j - 1) * 0.035
-            grid::grid.rect(x = x_pos, y = info_y - 0.006, width = 0.032, height = 0.014, just = c("center", "center"),
-                            gp = grid::gpar(fill = beh_colors[j], col = NA))
-            grid::grid.text(beh_labels[j], x = x_pos, y = info_y - 0.006, gp = grid::gpar(fontsize = 5, fontface = "bold"))
-          }
-          
-          # Punish/Struggle (compact)
-          punishes_text <- if (length(profile$punishes) > 0) substr(paste(profile$punishes, collapse = ","), 1, 25) else "-"
-          struggles_text <- if (length(profile$struggles) > 0) substr(paste(profile$struggles, collapse = ","), 1, 25) else "-"
-          grid::grid.text(paste0("✓", punishes_text), x = 0.68, y = info_y, just = "left",
-                          gp = grid::gpar(fontsize = 5, col = "#1A9850"))
-          grid::grid.text(paste0("✗", struggles_text), x = 0.68, y = info_y - 0.012, just = "left",
-                          gp = grid::gpar(fontsize = 5, col = "#D73027"))
-          
-          # === ROW 2: IN-GAME NOTES (emphasized!) ===
-          notes_y <- y_top - 0.04
-          
-          # Pitch Plan box
-          grid::grid.text("Plan:", x = 0.04, y = notes_y + 0.004, just = "left",
-                          gp = grid::gpar(fontsize = 6, fontface = "bold", col = "#006F71"))
-          grid::grid.rect(x = 0.095, y = notes_y - 0.012, width = 0.09, height = 0.035, just = c("center", "center"),
-                          gp = grid::gpar(fill = "white", col = "#ccc", lwd = 0.5))
-          
-          # 5 AB boxes with diamonds
-          for (ab in 1:5) {
-            ab_x <- 0.16 + (ab - 1) * 0.16
-            # AB number
-            grid::grid.text(ab, x = ab_x, y = notes_y + 0.008, gp = grid::gpar(fontsize = 7, fontface = "bold"))
-            # P: input
-            grid::grid.rect(x = ab_x, y = notes_y - 0.004, width = 0.045, height = 0.012, just = c("center", "center"),
-                            gp = grid::gpar(fill = "white", col = "#ccc", lwd = 0.3))
-            # Diamond
-            grid::grid.polygon(x = c(ab_x + 0.055, ab_x + 0.07, ab_x + 0.055, ab_x + 0.04),
-                               y = c(notes_y + 0.01, notes_y - 0.005, notes_y - 0.02, notes_y - 0.005),
-                               gp = grid::gpar(fill = "white", col = "#aaa", lwd = 0.4))
+          # ============================================================
+          # ONE-ROW FORMAT (Landscape, 4 per page, detailed)
+          # ============================================================
+          if (card_format == "one_row") {
+            # Card background
+            grid::grid.rect(x = 0.5, y = y_top, width = 0.96, height = card_height - 0.01,
+                            just = c("center", "top"),
+                            gp = grid::gpar(fill = "#fafafa", col = border_col, lwd = 2))
+            
+            info_y <- y_top - 0.015
+            
+            # Column 1: Name + Profile Info
+            grid::grid.text("Game Cards", x = 0.03, y = info_y, just = "left", 
+                            gp = grid::gpar(fontsize = 8, fontface = "bold", col = "#006F71"))
+            grid::grid.rect(x = 0.09, y = info_y - 0.045, width = 0.11, height = 0.08, just = c("center", "center"),
+                            gp = grid::gpar(fill = "white", col = border_col, lwd = 1))
+            grid::grid.text(paste0(profile$name, " (", profile$hand, ")"), x = 0.09, y = info_y - 0.02, 
+                            gp = grid::gpar(fontsize = 9, fontface = "bold"))
+            grid::grid.text(paste0("1st Pitch: ", profile$aggro_1p), x = 0.04, y = info_y - 0.04, just = "left",
+                            gp = grid::gpar(fontsize = 6))
+            grid::grid.text(paste0("2 Strike: ", profile$chase_2k, " Chase"), x = 0.04, y = info_y - 0.055, just = "left",
+                            gp = grid::gpar(fontsize = 6))
+            grid::grid.text(paste0("Punishes: ", if(length(profile$punishes) > 0) profile$punishes[1] else "-"), 
+                            x = 0.04, y = info_y - 0.07, just = "left", gp = grid::gpar(fontsize = 6))
+            
+            # Hitter Profile box
+            grid::grid.text("Hitter Profile", x = 0.04, y = info_y - 0.095, just = "left",
+                            gp = grid::gpar(fontsize = 7, fontface = "bold", fontfamily = "mono"))
+            grade_labels <- c("Pwr", "Con")
+            grades_rhp <- c(profile$rhp_power, profile$rhp_contact)
+            for (g in 1:2) {
+              x_pos <- 0.06 + (g - 1) * 0.04
+              grid::grid.rect(x = x_pos, y = info_y - 0.115, width = 0.03, height = 0.015, just = c("center", "center"),
+                              gp = grid::gpar(fill = grade_color(grades_rhp[g]), col = NA))
+              grid::grid.text(grades_rhp[g], x = x_pos, y = info_y - 0.115, gp = grid::gpar(fontsize = 6, fontface = "bold"))
+            }
+            
+            # Column 2-3: Heatmaps (placeholder boxes)
+            for (col in 1:4) {
+              x_base <- 0.17 + (col - 1) * 0.11
+              grid::grid.rect(x = x_base, y = info_y - 0.065, width = 0.09, height = 0.11, just = c("center", "center"),
+                              gp = grid::gpar(fill = "#f0f0f0", col = "#ccc", lwd = 0.5))
+              labels <- c("FB Power", "FB Whiff", "BB Power", "BB Whiff")
+              grid::grid.text(labels[col], x = x_base, y = info_y - 0.01, gp = grid::gpar(fontsize = 5, col = "#666"))
+            }
+            
+            # Column 4: Movement & Spray (placeholder)
+            grid::grid.rect(x = 0.64, y = info_y - 0.04, width = 0.08, height = 0.06, just = c("center", "center"),
+                            gp = grid::gpar(fill = "#f0f0f0", col = "#ccc", lwd = 0.5))
+            grid::grid.text("Movement", x = 0.64, y = info_y - 0.01, gp = grid::gpar(fontsize = 5, col = "#666"))
+            grid::grid.rect(x = 0.64, y = info_y - 0.105, width = 0.08, height = 0.05, just = c("center", "center"),
+                            gp = grid::gpar(fill = "#f0f0f0", col = "#ccc", lwd = 0.5))
+            grid::grid.text("Spray", x = 0.64, y = info_y - 0.08, gp = grid::gpar(fontsize = 5, col = "#666"))
+            
+            # Column 5: Stats + Notes
+            grid::grid.text("vs Pitch Type (SLG|Whiff%)", x = 0.72, y = info_y - 0.01, just = "left",
+                            gp = grid::gpar(fontsize = 6, fontface = "bold"))
+            pitch_types <- c("FB", "BB", "OS")
+            pitch_colors <- c("#FA8072", "#A020F0", "#2E8B57")
+            for (p in 1:3) {
+              y_pos <- info_y - 0.025 - (p - 1) * 0.015
+              grid::grid.text(pitch_types[p], x = 0.72, y = y_pos, just = "left",
+                              gp = grid::gpar(fontsize = 5, col = pitch_colors[p], fontface = "bold"))
+              split <- profile$splits[[paste0("RHP_", pitch_types[p])]]$stats
+              slg <- if (!is.null(split$SLG) && !is.na(split$SLG)) sprintf(".%03d", round(split$SLG * 1000)) else "-"
+              whiff <- if (!is.null(split$Whiff_pct) && !is.na(split$Whiff_pct)) sprintf("%.0f%%", split$Whiff_pct) else "-"
+              grid::grid.text(paste0("R:", slg, "|", whiff), x = 0.76, y = y_pos, just = "left", gp = grid::gpar(fontsize = 5))
+            }
+            
             # Notes box
-            grid::grid.rect(x = ab_x + 0.055, y = notes_y - 0.032, width = 0.10, height = 0.018, just = c("center", "center"),
-                            gp = grid::gpar(fill = "white", col = "#aaa", lwd = 0.4))
+            grid::grid.text("In game notes:", x = 0.72, y = info_y - 0.075, just = "left",
+                            gp = grid::gpar(fontsize = 6, fontface = "bold", col = "#006F71"))
+            grid::grid.rect(x = 0.82, y = info_y - 0.105, width = 0.14, height = 0.045, just = c("center", "center"),
+                            gp = grid::gpar(fill = "white", col = "#ccc", lwd = 0.5))
+            
+            # Pitch Plan row
+            grid::grid.text("Plan:", x = 0.03, y = info_y - 0.14, just = "left",
+                            gp = grid::gpar(fontsize = 6, fontface = "bold", col = "#006F71"))
+            grid::grid.rect(x = 0.12, y = info_y - 0.14, width = 0.12, height = 0.025, just = c("center", "center"),
+                            gp = grid::gpar(fill = "white", col = "#ccc", lwd = 0.5))
+            grid::grid.text("vs RHP:", x = 0.20, y = info_y - 0.14, just = "left",
+                            gp = grid::gpar(fontsize = 6, fontface = "bold", col = "#e65100"))
+            grid::grid.rect(x = 0.31, y = info_y - 0.14, width = 0.12, height = 0.025, just = c("center", "center"),
+                            gp = grid::gpar(fill = "white", col = "#ccc", lwd = 0.5))
+            grid::grid.text("vs LHP:", x = 0.40, y = info_y - 0.14, just = "left",
+                            gp = grid::gpar(fontsize = 6, fontface = "bold", col = "#2e7d32"))
+            grid::grid.rect(x = 0.51, y = info_y - 0.14, width = 0.12, height = 0.025, just = c("center", "center"),
+                            gp = grid::gpar(fill = "white", col = "#ccc", lwd = 0.5))
+            
+          # ============================================================
+          # HALF-PAGE FORMAT (Portrait, 2 per page)
+          # ============================================================
+          } else if (card_format == "half_page") {
+            # Card background
+            grid::grid.rect(x = 0.5, y = y_top, width = 0.96, height = card_height - 0.02,
+                            just = c("center", "top"),
+                            gp = grid::gpar(fill = "#fafafa", col = border_col, lwd = 2.5))
+            
+            info_y <- y_top - 0.02
+            
+            # Header
+            grid::grid.text(paste0(profile$name, " (", profile$hand, ")"), x = 0.05, y = info_y,
+                            just = "left", gp = grid::gpar(fontsize = 14, fontface = "bold"))
+            grid::grid.text(paste0("n=", profile$n, " | RV/100: ", sprintf("%+.2f", rv)), x = 0.05, y = info_y - 0.025,
+                            just = "left", gp = grid::gpar(fontsize = 9, col = border_col, fontface = "bold"))
+            
+            # Stats badges
+            stats_x <- 0.40
+            stat_labels <- c(
+              paste0("EV:", if(!is.na(rs$ev)) round(rs$ev, 1) else "-"),
+              paste0("Wh:", if(!is.na(rs$whiff)) paste0(round(rs$whiff, 0), "%") else "-"),
+              paste0("Ch:", if(!is.na(rs$chase)) paste0(round(rs$chase, 0), "%") else "-"),
+              paste0("K:", if(!is.na(rs$k_pct)) paste0(round(rs$k_pct, 0), "%") else "-"),
+              paste0(substr(profile$aggro_1p, 1, 3), "1P"),
+              paste0(substr(profile$chase_2k, 1, 2), "2K")
+            )
+            stat_colors <- c(
+              stat_badge_color(rs$ev, "ev"),
+              stat_badge_color(rs$whiff, "whiff", TRUE),
+              stat_badge_color(rs$chase, "chase", TRUE),
+              stat_badge_color(rs$k_pct, "k_pct", TRUE),
+              if (profile$aggro_1p == "Aggressive") "#FC8D59" else if (profile$aggro_1p == "Patient") "#91CF60" else "#E0E0E0",
+              if (profile$chase_2k == "High") "#FC8D59" else if (profile$chase_2k == "Low") "#91CF60" else "#E0E0E0"
+            )
+            for (j in seq_along(stat_labels)) {
+              x_pos <- stats_x + (j - 1) * 0.085
+              grid::grid.rect(x = x_pos, y = info_y - 0.008, width = 0.075, height = 0.022, just = c("center", "center"),
+                              gp = grid::gpar(fill = stat_colors[j], col = NA))
+              grid::grid.text(stat_labels[j], x = x_pos, y = info_y - 0.008, gp = grid::gpar(fontsize = 7, fontface = "bold"))
+            }
+            
+            # Punish/Struggle
+            punishes_text <- if (length(profile$punishes) > 0) paste(profile$punishes, collapse = ", ") else "-"
+            struggles_text <- if (length(profile$struggles) > 0) paste(profile$struggles, collapse = ", ") else "-"
+            grid::grid.text(paste0("✓ Punishes: ", punishes_text), x = 0.05, y = info_y - 0.055, just = "left",
+                            gp = grid::gpar(fontsize = 8, col = "#1A9850"))
+            grid::grid.text(paste0("✗ Struggles: ", struggles_text), x = 0.05, y = info_y - 0.075, just = "left",
+                            gp = grid::gpar(fontsize = 8, col = "#D73027"))
+            
+            # Grades
+            grid::grid.text("Grades (20-80):", x = 0.05, y = info_y - 0.10, just = "left",
+                            gp = grid::gpar(fontsize = 8, fontface = "bold", col = "#006F71"))
+            grade_labels <- c("Raw", "Game", "Con", "AvK", "Dec")
+            grades_rhp <- c(profile$rhp_raw_power, profile$rhp_power, profile$rhp_contact, profile$rhp_avoid_k, profile$rhp_swing_dec)
+            grades_lhp <- c(profile$lhp_raw_power, profile$lhp_power, profile$lhp_contact, profile$lhp_avoid_k, profile$lhp_swing_dec)
+            
+            for (g in seq_along(grade_labels)) {
+              x_pos <- 0.10 + (g - 1) * 0.055
+              grid::grid.text(grade_labels[g], x = x_pos, y = info_y - 0.115, gp = grid::gpar(fontsize = 6))
+            }
+            grid::grid.text("vRHP", x = 0.05, y = info_y - 0.135, just = "left", gp = grid::gpar(fontsize = 7, fontface = "bold", col = "#e65100"))
+            for (g in seq_along(grades_rhp)) {
+              x_pos <- 0.10 + (g - 1) * 0.055
+              grid::grid.rect(x = x_pos, y = info_y - 0.135, width = 0.04, height = 0.018, just = c("center", "center"),
+                              gp = grid::gpar(fill = grade_color(grades_rhp[g]), col = NA))
+              grid::grid.text(grades_rhp[g], x = x_pos, y = info_y - 0.135, gp = grid::gpar(fontsize = 7, fontface = "bold"))
+            }
+            grid::grid.text("vLHP", x = 0.05, y = info_y - 0.16, just = "left", gp = grid::gpar(fontsize = 7, fontface = "bold", col = "#2e7d32"))
+            for (g in seq_along(grades_lhp)) {
+              x_pos <- 0.10 + (g - 1) * 0.055
+              grid::grid.rect(x = x_pos, y = info_y - 0.16, width = 0.04, height = 0.018, just = c("center", "center"),
+                              gp = grid::gpar(fill = grade_color(grades_lhp[g]), col = NA))
+              grid::grid.text(grades_lhp[g], x = x_pos, y = info_y - 0.16, gp = grid::gpar(fontsize = 7, fontface = "bold"))
+            }
+            
+            # Heatmap placeholders
+            grid::grid.text("vs RHP Whiff Heatmaps", x = 0.40, y = info_y - 0.06, gp = grid::gpar(fontsize = 8, fontface = "bold", col = "#e65100"))
+            for (j in 1:3) {
+              x_pos <- 0.38 + (j - 1) * 0.12
+              grid::grid.rect(x = x_pos, y = info_y - 0.12, width = 0.10, height = 0.10, just = c("center", "center"),
+                              gp = grid::gpar(fill = "#f5f5f5", col = "#ccc", lwd = 0.5))
+              pitch_labels <- c("FB", "BB", "OS")
+              grid::grid.text(pitch_labels[j], x = x_pos, y = info_y - 0.07, gp = grid::gpar(fontsize = 6, col = c("#FA8072", "#A020F0", "#2E8B57")[j], fontface = "bold"))
+            }
+            
+            grid::grid.text("vs LHP Whiff Heatmaps", x = 0.75, y = info_y - 0.06, gp = grid::gpar(fontsize = 8, fontface = "bold", col = "#2e7d32"))
+            for (j in 1:3) {
+              x_pos <- 0.73 + (j - 1) * 0.12
+              if (x_pos <= 0.95) {
+                grid::grid.rect(x = x_pos, y = info_y - 0.12, width = 0.10, height = 0.10, just = c("center", "center"),
+                                gp = grid::gpar(fill = "#f5f5f5", col = "#ccc", lwd = 0.5))
+              }
+            }
+            
+            # Notes section
+            notes_y <- info_y - 0.20
+            grid::grid.text("Pitch Plan", x = 0.05, y = notes_y, just = "left",
+                            gp = grid::gpar(fontsize = 10, fontface = "bold", col = "#006F71"))
+            grid::grid.rect(x = 0.18, y = notes_y - 0.06, width = 0.22, height = 0.10, just = c("center", "center"),
+                            gp = grid::gpar(fill = "white", col = "#ccc", lwd = 0.5))
+            grid::grid.text("Overall", x = 0.08, y = notes_y - 0.025, just = "left", gp = grid::gpar(fontsize = 7, fontface = "bold"))
+            
+            grid::grid.rect(x = 0.45, y = notes_y - 0.06, width = 0.22, height = 0.10, just = c("center", "center"),
+                            gp = grid::gpar(fill = "white", col = "#ccc", lwd = 0.5))
+            grid::grid.text("vs RHP", x = 0.35, y = notes_y - 0.025, just = "left", gp = grid::gpar(fontsize = 7, fontface = "bold", col = "#e65100"))
+            
+            grid::grid.rect(x = 0.72, y = notes_y - 0.06, width = 0.22, height = 0.10, just = c("center", "center"),
+                            gp = grid::gpar(fill = "white", col = "#ccc", lwd = 0.5))
+            grid::grid.text("vs LHP", x = 0.62, y = notes_y - 0.025, just = "left", gp = grid::gpar(fontsize = 7, fontface = "bold", col = "#2e7d32"))
+            
+          # ============================================================
+          # FULL-PAGE FORMAT (Portrait, 1 per page, maximum detail)
+          # ============================================================
+          } else {
+            # Card background
+            grid::grid.rect(x = 0.5, y = y_top, width = 0.96, height = card_height - 0.01,
+                            just = c("center", "top"),
+                            gp = grid::gpar(fill = "#fafafa", col = border_col, lwd = 3))
+            
+            info_y <- y_top - 0.02
+            
+            # Large Header
+            grid::grid.rect(x = 0.5, y = info_y + 0.005, width = 0.92, height = 0.045, just = c("center", "center"),
+                            gp = grid::gpar(fill = "#006F71", col = NA))
+            grid::grid.text(paste0(profile$name, " (", profile$hand, ")"), x = 0.08, y = info_y,
+                            just = "left", gp = grid::gpar(fontsize = 18, fontface = "bold", col = "white"))
+            grid::grid.text(paste0("n=", profile$n, " | RV/100: ", sprintf("%+.2f", rv)), x = 0.08, y = info_y - 0.018,
+                            just = "left", gp = grid::gpar(fontsize = 11, col = "white"))
+            
+            # Stats badges (larger)
+            stats_x <- 0.45
+            stat_labels <- c(
+              paste0("EV:", if(!is.na(rs$ev)) round(rs$ev, 1) else "-"),
+              paste0("EV90:", if(!is.na(rs$ev90)) round(rs$ev90, 1) else "-"),
+              paste0("Whiff:", if(!is.na(rs$whiff)) paste0(round(rs$whiff, 0), "%") else "-"),
+              paste0("Chase:", if(!is.na(rs$chase)) paste0(round(rs$chase, 0), "%") else "-"),
+              paste0("K%:", if(!is.na(rs$k_pct)) paste0(round(rs$k_pct, 0), "%") else "-"),
+              paste0(profile$aggro_1p, " 1P"),
+              paste0(profile$chase_2k, " 2K")
+            )
+            stat_colors <- c(
+              stat_badge_color(rs$ev, "ev"),
+              stat_badge_color(rs$ev90, "ev90"),
+              stat_badge_color(rs$whiff, "whiff", TRUE),
+              stat_badge_color(rs$chase, "chase", TRUE),
+              stat_badge_color(rs$k_pct, "k_pct", TRUE),
+              if (profile$aggro_1p == "Aggressive") "#FC8D59" else if (profile$aggro_1p == "Patient") "#91CF60" else "#E0E0E0",
+              if (profile$chase_2k == "High") "#FC8D59" else if (profile$chase_2k == "Low") "#91CF60" else "#E0E0E0"
+            )
+            for (j in seq_along(stat_labels)) {
+              x_pos <- stats_x + (j - 1) * 0.08
+              if (x_pos <= 0.93) {
+                grid::grid.rect(x = x_pos, y = info_y - 0.008, width = 0.07, height = 0.025, just = c("center", "center"),
+                                gp = grid::gpar(fill = stat_colors[j], col = NA))
+                grid::grid.text(stat_labels[j], x = x_pos, y = info_y - 0.008, gp = grid::gpar(fontsize = 8, fontface = "bold"))
+              }
+            }
+            
+            # Section 1: Profile Info
+            section_y <- info_y - 0.07
+            
+            # Punish/Struggle box
+            punishes_text <- if (length(profile$punishes) > 0) paste(profile$punishes, collapse = ", ") else "-"
+            struggles_text <- if (length(profile$struggles) > 0) paste(profile$struggles, collapse = ", ") else "-"
+            grid::grid.rect(x = 0.18, y = section_y - 0.04, width = 0.28, height = 0.07, just = c("center", "center"),
+                            gp = grid::gpar(fill = "white", col = "#ddd", lwd = 1))
+            grid::grid.text(paste0("✓ Punishes: ", punishes_text), x = 0.06, y = section_y - 0.02, just = "left",
+                            gp = grid::gpar(fontsize = 10, col = "#1A9850", fontface = "bold"))
+            grid::grid.text(paste0("✗ Struggles: ", struggles_text), x = 0.06, y = section_y - 0.05, just = "left",
+                            gp = grid::gpar(fontsize = 10, col = "#D73027", fontface = "bold"))
+            
+            # Large Grades table
+            grid::grid.rect(x = 0.50, y = section_y - 0.04, width = 0.28, height = 0.07, just = c("center", "center"),
+                            gp = grid::gpar(fill = "white", col = "#ddd", lwd = 1))
+            grid::grid.text("Grades (20-80 Scale)", x = 0.38, y = section_y - 0.01, just = "left",
+                            gp = grid::gpar(fontsize = 10, fontface = "bold", col = "#006F71"))
+            
+            grade_labels <- c("Raw", "Game", "Con", "AvK", "Dec")
+            grades_rhp <- c(profile$rhp_raw_power, profile$rhp_power, profile$rhp_contact, profile$rhp_avoid_k, profile$rhp_swing_dec)
+            grades_lhp <- c(profile$lhp_raw_power, profile$lhp_power, profile$lhp_contact, profile$lhp_avoid_k, profile$lhp_swing_dec)
+            
+            for (g in seq_along(grade_labels)) {
+              x_pos <- 0.42 + (g - 1) * 0.045
+              grid::grid.text(grade_labels[g], x = x_pos, y = section_y - 0.025, gp = grid::gpar(fontsize = 7))
+            }
+            grid::grid.text("vRHP", x = 0.38, y = section_y - 0.045, just = "left", gp = grid::gpar(fontsize = 8, fontface = "bold", col = "#e65100"))
+            for (g in seq_along(grades_rhp)) {
+              x_pos <- 0.42 + (g - 1) * 0.045
+              grid::grid.rect(x = x_pos, y = section_y - 0.045, width = 0.035, height = 0.018, just = c("center", "center"),
+                              gp = grid::gpar(fill = grade_color(grades_rhp[g]), col = NA))
+              grid::grid.text(grades_rhp[g], x = x_pos, y = section_y - 0.045, gp = grid::gpar(fontsize = 8, fontface = "bold"))
+            }
+            grid::grid.text("vLHP", x = 0.38, y = section_y - 0.065, just = "left", gp = grid::gpar(fontsize = 8, fontface = "bold", col = "#2e7d32"))
+            for (g in seq_along(grades_lhp)) {
+              x_pos <- 0.42 + (g - 1) * 0.045
+              grid::grid.rect(x = x_pos, y = section_y - 0.065, width = 0.035, height = 0.018, just = c("center", "center"),
+                              gp = grid::gpar(fill = grade_color(grades_lhp[g]), col = NA))
+              grid::grid.text(grades_lhp[g], x = x_pos, y = section_y - 0.065, gp = grid::gpar(fontsize = 8, fontface = "bold"))
+            }
+            
+            # Pitch Type Stats
+            grid::grid.rect(x = 0.82, y = section_y - 0.04, width = 0.28, height = 0.07, just = c("center", "center"),
+                            gp = grid::gpar(fill = "white", col = "#ddd", lwd = 1))
+            grid::grid.text("vs Pitch Type (SLG | Whiff%)", x = 0.70, y = section_y - 0.01, just = "left",
+                            gp = grid::gpar(fontsize = 10, fontface = "bold", col = "#006F71"))
+            
+            pitch_types <- c("FB", "BB", "OS")
+            pitch_colors <- c("#FA8072", "#A020F0", "#2E8B57")
+            for (p in 1:3) {
+              y_pos <- section_y - 0.02 - (p - 1) * 0.02
+              grid::grid.text(pitch_types[p], x = 0.70, y = y_pos, just = "left",
+                              gp = grid::gpar(fontsize = 8, col = pitch_colors[p], fontface = "bold"))
+              split_rhp <- profile$splits[[paste0("RHP_", pitch_types[p])]]$stats
+              split_lhp <- profile$splits[[paste0("LHP_", pitch_types[p])]]$stats
+              slg_r <- if (!is.null(split_rhp$SLG) && !is.na(split_rhp$SLG)) sprintf(".%03d", round(split_rhp$SLG * 1000)) else "-"
+              whiff_r <- if (!is.null(split_rhp$Whiff_pct) && !is.na(split_rhp$Whiff_pct)) sprintf("%.0f%%", split_rhp$Whiff_pct) else "-"
+              slg_l <- if (!is.null(split_lhp$SLG) && !is.na(split_lhp$SLG)) sprintf(".%03d", round(split_lhp$SLG * 1000)) else "-"
+              whiff_l <- if (!is.null(split_lhp$Whiff_pct) && !is.na(split_lhp$Whiff_pct)) sprintf("%.0f%%", split_lhp$Whiff_pct) else "-"
+              grid::grid.text(paste0("R:", slg_r, "|", whiff_r), x = 0.78, y = y_pos, just = "left", gp = grid::gpar(fontsize = 7))
+              grid::grid.text(paste0("L:", slg_l, "|", whiff_l), x = 0.88, y = y_pos, just = "left", gp = grid::gpar(fontsize = 7))
+            }
+            
+            # Section 2: Heatmaps (placeholders)
+            heatmap_y <- section_y - 0.12
+            grid::grid.text("vs RHP Heatmaps", x = 0.20, y = heatmap_y, gp = grid::gpar(fontsize = 12, fontface = "bold", col = "#e65100"))
+            for (j in 1:3) {
+              x_pos <- 0.12 + (j - 1) * 0.12
+              grid::grid.rect(x = x_pos, y = heatmap_y - 0.09, width = 0.11, height = 0.14, just = c("center", "center"),
+                              gp = grid::gpar(fill = "#f5f5f5", col = "#ccc", lwd = 0.5))
+              pitch_labels <- c("FB", "BB", "OS")
+              grid::grid.text(pitch_labels[j], x = x_pos, y = heatmap_y - 0.02, gp = grid::gpar(fontsize = 9, col = pitch_colors[j], fontface = "bold"))
+            }
+            
+            grid::grid.text("vs LHP Heatmaps", x = 0.70, y = heatmap_y, gp = grid::gpar(fontsize = 12, fontface = "bold", col = "#2e7d32"))
+            for (j in 1:3) {
+              x_pos <- 0.62 + (j - 1) * 0.12
+              grid::grid.rect(x = x_pos, y = heatmap_y - 0.09, width = 0.11, height = 0.14, just = c("center", "center"),
+                              gp = grid::gpar(fill = "#f5f5f5", col = "#ccc", lwd = 0.5))
+              pitch_labels <- c("FB", "BB", "OS")
+              grid::grid.text(pitch_labels[j], x = x_pos, y = heatmap_y - 0.02, gp = grid::gpar(fontsize = 9, col = pitch_colors[j], fontface = "bold"))
+            }
+            
+            # Section 3: Movement Plots (placeholders)
+            movement_y <- heatmap_y - 0.20
+            grid::grid.text("vs RHP Movement", x = 0.20, y = movement_y, gp = grid::gpar(fontsize = 12, fontface = "bold", col = "#e65100"))
+            for (j in 1:3) {
+              x_pos <- 0.12 + (j - 1) * 0.12
+              grid::grid.rect(x = x_pos, y = movement_y - 0.09, width = 0.11, height = 0.14, just = c("center", "center"),
+                              gp = grid::gpar(fill = "#f5f5f5", col = "#ccc", lwd = 0.5))
+            }
+            
+            grid::grid.text("vs LHP Movement", x = 0.70, y = movement_y, gp = grid::gpar(fontsize = 12, fontface = "bold", col = "#2e7d32"))
+            for (j in 1:3) {
+              x_pos <- 0.62 + (j - 1) * 0.12
+              grid::grid.rect(x = x_pos, y = movement_y - 0.09, width = 0.11, height = 0.14, just = c("center", "center"),
+                              gp = grid::gpar(fill = "#f5f5f5", col = "#ccc", lwd = 0.5))
+            }
+            
+            # Section 4: Large Notes Section
+            notes_y <- movement_y - 0.20
+            grid::grid.text("Pitch Plan", x = 0.08, y = notes_y, just = "left",
+                            gp = grid::gpar(fontsize = 14, fontface = "bold", col = "#006F71"))
+            
+            # 3 note boxes: Overall, vs RHP, vs LHP
+            note_boxes <- c("Overall Approach", "vs RHP", "vs LHP")
+            note_colors <- c("#006F71", "#e65100", "#2e7d32")
+            for (n in 1:3) {
+              x_pos <- 0.08 + (n - 1) * 0.30
+              grid::grid.text(note_boxes[n], x = x_pos, y = notes_y - 0.025, just = "left",
+                              gp = grid::gpar(fontsize = 10, fontface = "bold", col = note_colors[n]))
+              grid::grid.rect(x = x_pos + 0.12, y = notes_y - 0.08, width = 0.26, height = 0.08, just = c("center", "center"),
+                              gp = grid::gpar(fill = "white", col = "#ccc", lwd = 1))
+            }
+            
+            # In-Game Notes with AB boxes
+            ingame_y <- notes_y - 0.14
+            grid::grid.text("In-Game Notes", x = 0.08, y = ingame_y, just = "left",
+                            gp = grid::gpar(fontsize = 14, fontface = "bold", col = "#006F71"))
+            
+            for (ab in 1:5) {
+              ab_x <- 0.08 + (ab - 1) * 0.18
+              # AB number
+              grid::grid.text(ab, x = ab_x + 0.06, y = ingame_y - 0.02, gp = grid::gpar(fontsize = 14, fontface = "bold"))
+              # P: and I: labels
+              grid::grid.text("P:___ I:___", x = ab_x + 0.06, y = ingame_y - 0.04, gp = grid::gpar(fontsize = 7, col = "#666"))
+              # Diamond
+              grid::grid.polygon(x = c(ab_x + 0.06, ab_x + 0.10, ab_x + 0.06, ab_x + 0.02),
+                                 y = c(ingame_y - 0.045, ingame_y - 0.075, ingame_y - 0.105, ingame_y - 0.075),
+                                 gp = grid::gpar(fill = "white", col = "#888", lwd = 1))
+              # Notes box
+              grid::grid.rect(x = ab_x + 0.06, y = ingame_y - 0.14, width = 0.14, height = 0.05, just = c("center", "center"),
+                              gp = grid::gpar(fill = "white", col = "#aaa", lwd = 0.5))
+            }
           }
         }
         
         # Footer
         grid::grid.text(format(Sys.Date(), "%B %d, %Y"), x = 0.95, y = 0.01, just = "right",
-                        gp = grid::gpar(cex = 0.5, col = "gray50"))
+                        gp = grid::gpar(cex = 0.6, col = "gray50"))
       }
       
       dev.off()
-      showNotification("Hitter Cards PDF generated!", type = "message")
+      showNotification(paste0("Hitter Cards PDF (", card_format, " format) generated!"), type = "message")
     }
   )
   
