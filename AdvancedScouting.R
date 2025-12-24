@@ -3453,6 +3453,201 @@ build_matchup_matrix <- function(pitchers, hitters) {
     ungroup()
 }
 
+# Build Pitch Type Matrix - shows hitter performance vs each pitch type and location
+build_pitch_type_matrix <- function(pitcher_name, hitter_names, metric = "rv100") {
+  if (is.null(pitcher_name) || length(hitter_names) == 0) return(NULL)
+  
+  # Get pitcher's arsenal directly from data (by TaggedPitchType)
+  p_data <- tm_data %>% 
+    filter(Pitcher == pitcher_name, !is.na(TaggedPitchType)) %>%
+    group_by(TaggedPitchType, PitcherThrows) %>%
+    summarise(n = n(), .groups = "drop") %>%
+    filter(n >= 10) %>%
+    arrange(desc(n))
+  
+  if (nrow(p_data) == 0) return(NULL)
+  
+  p_hand <- p_data$PitcherThrows[1]
+  pitch_types <- p_data$TaggedPitchType
+  
+  # Initialize results
+  results <- list()
+  
+  for (h_name in hitter_names) {
+    # Get hitter's hand
+    h_data <- tm_data %>% filter(Batter == h_name)
+    if (nrow(h_data) < 20) next
+    h_hand <- if (nrow(h_data) > 0) h_data$BatterSide[1] else "Right"
+    
+    row_data <- list(Hitter = h_name, Hand = h_hand)
+    
+    # Calculate stats vs each pitch type
+    for (pitch_type in pitch_types) {
+      # Filter batter data for this pitch type (exact match only for cleaner analysis)
+      batter_vs_type <- h_data %>%
+        filter(TaggedPitchType == pitch_type)
+      
+      if (nrow(batter_vs_type) >= 5) {
+        n_pitches <- nrow(batter_vs_type)
+        n_swings <- sum(batter_vs_type$SwingIndicator, na.rm = TRUE)
+        n_whiffs <- sum(batter_vs_type$WhiffIndicator, na.rm = TRUE)
+        n_ab <- sum(batter_vs_type$ABindicator, na.rm = TRUE)
+        n_hits <- sum(batter_vs_type$HitIndicator, na.rm = TRUE)
+        tb <- sum(batter_vs_type$totalbases, na.rm = TRUE)
+        
+        # RV/100 calculation
+        rv <- (tb * 0.3 + 
+               sum(batter_vs_type$KorBB == "Walk", na.rm = TRUE) * 0.3 -
+               sum(batter_vs_type$KorBB == "Strikeout", na.rm = TRUE) * 0.25 -
+               sum(batter_vs_type$PlayResult == "Out", na.rm = TRUE) * 0.1) / n_pitches * 100
+        
+        # Calculate metrics
+        whiff_pct <- if (n_swings >= 5) round(n_whiffs / n_swings * 100, 1) else NA
+        slg <- if (n_ab >= 3) round(tb / n_ab, 3) else NA
+        woba <- if ("woba" %in% names(batter_vs_type) && n_ab >= 3) round(mean(batter_vs_type$woba, na.rm = TRUE), 3) else NA
+        
+        col_name <- paste0(pitch_type, "_", metric)
+        row_data[[pitch_type]] <- switch(metric,
+          "rv100" = round(rv, 2),
+          "whiff" = whiff_pct,
+          "slg" = slg,
+          "woba" = woba,
+          round(rv, 2)
+        )
+        row_data[[paste0(pitch_type, "_n")]] <- n_pitches
+      } else {
+        row_data[[pitch_type]] <- NA
+        row_data[[paste0(pitch_type, "_n")]] <- 0
+      }
+    }
+    
+    # === LOCATION-BASED COLUMNS ===
+    # Determine "In" and "Out" based on pitcher and batter handedness
+    # Same-side matchup (RHP vs RHH or LHP vs LHH): Inside = negative PlateLocSide
+    # Opposite-side matchup (RHP vs LHH or LHP vs RHH): Inside = positive PlateLocSide
+    same_side <- (p_hand == "Right" && h_hand == "Right") || (p_hand == "Left" && h_hand == "Left")
+    
+    # Filter to pitches with location data
+    loc_data <- h_data %>%
+      filter(PitcherThrows == p_hand, !is.na(PlateLocSide), !is.na(PlateLocHeight))
+    
+    if (nrow(loc_data) >= 10) {
+      # Elevated: top 1/3 of zone and above (PlateLocHeight >= 2.8)
+      elevated_data <- loc_data %>% filter(PlateLocHeight >= 2.8)
+      if (nrow(elevated_data) >= 5) {
+        rv_elev <- (sum(elevated_data$totalbases, na.rm = TRUE) * 0.3 + 
+                    sum(elevated_data$KorBB == "Walk", na.rm = TRUE) * 0.3 -
+                    sum(elevated_data$KorBB == "Strikeout", na.rm = TRUE) * 0.25 -
+                    sum(elevated_data$PlayResult == "Out", na.rm = TRUE) * 0.1) / nrow(elevated_data) * 100
+        whiff_elev <- if (sum(elevated_data$SwingIndicator, na.rm = TRUE) >= 5) 
+          round(sum(elevated_data$WhiffIndicator, na.rm = TRUE) / sum(elevated_data$SwingIndicator, na.rm = TRUE) * 100, 1) else NA
+        slg_elev <- if (sum(elevated_data$ABindicator, na.rm = TRUE) >= 3)
+          round(sum(elevated_data$totalbases, na.rm = TRUE) / sum(elevated_data$ABindicator, na.rm = TRUE), 3) else NA
+        
+        row_data[["Elevated"]] <- switch(metric, "rv100" = round(rv_elev, 2), "whiff" = whiff_elev, "slg" = slg_elev, round(rv_elev, 2))
+        row_data[["Elevated_n"]] <- nrow(elevated_data)
+      } else {
+        row_data[["Elevated"]] <- NA
+        row_data[["Elevated_n"]] <- nrow(elevated_data)
+      }
+      
+      # Down: bottom 1/3 of zone and below (PlateLocHeight <= 2.0)
+      down_data <- loc_data %>% filter(PlateLocHeight <= 2.0)
+      if (nrow(down_data) >= 5) {
+        rv_down <- (sum(down_data$totalbases, na.rm = TRUE) * 0.3 + 
+                    sum(down_data$KorBB == "Walk", na.rm = TRUE) * 0.3 -
+                    sum(down_data$KorBB == "Strikeout", na.rm = TRUE) * 0.25 -
+                    sum(down_data$PlayResult == "Out", na.rm = TRUE) * 0.1) / nrow(down_data) * 100
+        whiff_down <- if (sum(down_data$SwingIndicator, na.rm = TRUE) >= 5) 
+          round(sum(down_data$WhiffIndicator, na.rm = TRUE) / sum(down_data$SwingIndicator, na.rm = TRUE) * 100, 1) else NA
+        slg_down <- if (sum(down_data$ABindicator, na.rm = TRUE) >= 3)
+          round(sum(down_data$totalbases, na.rm = TRUE) / sum(down_data$ABindicator, na.rm = TRUE), 3) else NA
+        
+        row_data[["Down"]] <- switch(metric, "rv100" = round(rv_down, 2), "whiff" = whiff_down, "slg" = slg_down, round(rv_down, 2))
+        row_data[["Down_n"]] <- nrow(down_data)
+      } else {
+        row_data[["Down"]] <- NA
+        row_data[["Down_n"]] <- nrow(down_data)
+      }
+      
+      # Inside: toward the batter (conditional on handedness)
+      # Same-side: inside = PlateLocSide < -0.3 (catcher's view, toward batter)
+      # Opposite-side: inside = PlateLocSide > 0.3
+      if (same_side) {
+        inside_data <- loc_data %>% filter(PlateLocSide < -0.3)
+      } else {
+        inside_data <- loc_data %>% filter(PlateLocSide > 0.3)
+      }
+      
+      if (nrow(inside_data) >= 5) {
+        rv_in <- (sum(inside_data$totalbases, na.rm = TRUE) * 0.3 + 
+                  sum(inside_data$KorBB == "Walk", na.rm = TRUE) * 0.3 -
+                  sum(inside_data$KorBB == "Strikeout", na.rm = TRUE) * 0.25 -
+                  sum(inside_data$PlayResult == "Out", na.rm = TRUE) * 0.1) / nrow(inside_data) * 100
+        whiff_in <- if (sum(inside_data$SwingIndicator, na.rm = TRUE) >= 5) 
+          round(sum(inside_data$WhiffIndicator, na.rm = TRUE) / sum(inside_data$SwingIndicator, na.rm = TRUE) * 100, 1) else NA
+        slg_in <- if (sum(inside_data$ABindicator, na.rm = TRUE) >= 3)
+          round(sum(inside_data$totalbases, na.rm = TRUE) / sum(inside_data$ABindicator, na.rm = TRUE), 3) else NA
+        
+        row_data[["In"]] <- switch(metric, "rv100" = round(rv_in, 2), "whiff" = whiff_in, "slg" = slg_in, round(rv_in, 2))
+        row_data[["In_n"]] <- nrow(inside_data)
+      } else {
+        row_data[["In"]] <- NA
+        row_data[["In_n"]] <- nrow(inside_data)
+      }
+      
+      # Outside: away from batter (conditional on handedness)
+      if (same_side) {
+        outside_data <- loc_data %>% filter(PlateLocSide > 0.3)
+      } else {
+        outside_data <- loc_data %>% filter(PlateLocSide < -0.3)
+      }
+      
+      if (nrow(outside_data) >= 5) {
+        rv_out <- (sum(outside_data$totalbases, na.rm = TRUE) * 0.3 + 
+                   sum(outside_data$KorBB == "Walk", na.rm = TRUE) * 0.3 -
+                   sum(outside_data$KorBB == "Strikeout", na.rm = TRUE) * 0.25 -
+                   sum(outside_data$PlayResult == "Out", na.rm = TRUE) * 0.1) / nrow(outside_data) * 100
+        whiff_out <- if (sum(outside_data$SwingIndicator, na.rm = TRUE) >= 5) 
+          round(sum(outside_data$WhiffIndicator, na.rm = TRUE) / sum(outside_data$SwingIndicator, na.rm = TRUE) * 100, 1) else NA
+        slg_out <- if (sum(outside_data$ABindicator, na.rm = TRUE) >= 3)
+          round(sum(outside_data$totalbases, na.rm = TRUE) / sum(outside_data$ABindicator, na.rm = TRUE), 3) else NA
+        
+        row_data[["Out"]] <- switch(metric, "rv100" = round(rv_out, 2), "whiff" = whiff_out, "slg" = slg_out, round(rv_out, 2))
+        row_data[["Out_n"]] <- nrow(outside_data)
+      } else {
+        row_data[["Out"]] <- NA
+        row_data[["Out_n"]] <- nrow(outside_data)
+      }
+    } else {
+      row_data[["Elevated"]] <- NA
+      row_data[["Down"]] <- NA
+      row_data[["In"]] <- NA
+      row_data[["Out"]] <- NA
+      row_data[["Elevated_n"]] <- 0
+      row_data[["Down_n"]] <- 0
+      row_data[["In_n"]] <- 0
+      row_data[["Out_n"]] <- 0
+    }
+    
+    results[[h_name]] <- row_data
+  }
+  
+  if (length(results) == 0) return(NULL)
+  
+  # Convert to tibble
+  result_df <- bind_rows(results)
+  
+  # Return with metadata
+  list(
+    data = result_df,
+    pitch_types = pitch_types,
+    pitcher = pitcher_name,
+    pitcher_hand = p_hand,
+    metric = metric
+  )
+}
+
 # ============================================================
 # 6. SHINY UI
 # ============================================================
@@ -3705,6 +3900,73 @@ ui <- fluidPage(
                 )
               ),
               uiOutput("matrix_detail_ui")
+          )
+        ),
+        
+        # Tab: Pitch Type Matrix (Hitters vs Pitcher's Arsenal)
+        tabPanel(
+          "Pitch Type Matrix",
+          div(style = "margin-top: 15px;",
+              
+              # Pitcher Selection
+              div(style = "background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #90caf9;",
+                  h5("Select Pitcher", style = "color: #1565c0; margin: 0 0 10px 0;"),
+                  fluidRow(
+                    column(4,
+                           selectizeInput("pitch_matrix_pitcher", "Pitcher",
+                                          choices = all_pitchers, selected = NULL,
+                                          options = list(placeholder = "Select pitcher..."))
+                    ),
+                    column(8,
+                           div(style = "padding-top: 5px; font-size: 12px; color: #666;",
+                               "Select a pitcher to see their pitch arsenal as columns")
+                    )
+                  )
+              ),
+              
+              # Hitter Selection
+              div(style = "background: #fff3e0; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ffcc80;",
+                  h5("Select Hitters", style = "color: #e65100; margin: 0 0 10px 0;"),
+                  fluidRow(
+                    column(12,
+                           selectizeInput("pitch_matrix_hitters", "Hitters (rows)",
+                                          choices = all_hitters, selected = NULL, multiple = TRUE,
+                                          options = list(maxItems = 15, placeholder = "Select hitters for rows..."))
+                    )
+                  )
+              ),
+              
+              # Options
+              fluidRow(
+                column(4,
+                       radioButtons("pitch_matrix_metric", "Display Metric",
+                                    choices = c("RV/100" = "rv100", "wOBA" = "woba", "SLG" = "slg", "Whiff%" = "whiff"),
+                                    selected = "rv100", inline = TRUE)
+                ),
+                column(4,
+                       radioButtons("pitch_matrix_color", "Color Perspective",
+                                    choices = c("Hitter (green=good)" = "hitter", "Pitcher (green=good)" = "pitcher"),
+                                    selected = "hitter", inline = TRUE)
+                ),
+                column(4,
+                       div(style = "padding-top: 5px;",
+                           downloadButton("download_pitch_matrix_png", "Download PNG", class = "btn-info btn-sm"))
+                )
+              ),
+              
+              # Legend
+              div(style = "background: #f5f5f5; padding: 10px; border-radius: 6px; margin-bottom: 15px; font-size: 11px;",
+                  strong("Legend: "),
+                  "Pitch type columns show hitter performance vs similar pitches. ",
+                  span(style = "color: #e65100; font-weight: bold;", "Location columns: "),
+                  "Elevated (top 1/3 of zone+), In (inside to batter), Out (away from batter), Down (bottom 1/3 of zone+). ",
+                  "In/Out are adjusted for pitcher-batter handedness matchups."
+              ),
+              
+              # Matrix output
+              div(id = "pitch_matrix_container",
+                  gt_output("pitch_type_matrix_table")
+              )
           )
         ),
         
@@ -6370,6 +6632,248 @@ server <- function(input, output, session) {
     req(result)
     create_similar_pitches_density_heatmap(result$similar_pitches_data, metric = "damage")
   }, bg = "transparent")
+  
+  # --------------------------------------------------------
+  # PITCH TYPE MATRIX TAB
+  # --------------------------------------------------------
+  
+  # Build pitch type matrix data
+  pitch_type_matrix_data <- reactive({
+    req(input$pitch_matrix_pitcher, input$pitch_matrix_hitters)
+    build_pitch_type_matrix(
+      input$pitch_matrix_pitcher, 
+      input$pitch_matrix_hitters,
+      metric = input$pitch_matrix_metric
+    )
+  })
+  
+  # Render pitch type matrix table
+  output$pitch_type_matrix_table <- render_gt({
+    matrix_result <- pitch_type_matrix_data()
+    req(matrix_result, nrow(matrix_result$data) > 0)
+    
+    df <- matrix_result$data
+    pitch_types <- matrix_result$pitch_types
+    metric <- matrix_result$metric
+    perspective <- input$pitch_matrix_color
+    
+    # Determine metric label and format
+    metric_label <- switch(metric,
+      "rv100" = "RV/100",
+      "whiff" = "Whiff%",
+      "slg" = "SLG",
+      "woba" = "wOBA",
+      "RV/100"
+    )
+    
+    # Start building gt table
+    # Select only display columns (not the _n columns)
+    display_cols <- c("Hitter", "Hand", pitch_types, "Elevated", "In", "Out", "Down")
+    display_cols <- display_cols[display_cols %in% names(df)]
+    
+    gt_df <- df %>% select(all_of(display_cols))
+    
+    # Create gt table
+    gt_table <- gt_df %>%
+      gt(rowname_col = "Hitter") %>%
+      tab_header(
+        title = md(paste0("**Pitch Type Matrix: ", input$pitch_matrix_pitcher, "**")),
+        subtitle = paste0("Metric: ", metric_label, " | Pitcher Hand: ", matrix_result$pitcher_hand)
+      ) %>%
+      tab_spanner(
+        label = "Pitch Types",
+        columns = any_of(pitch_types)
+      ) %>%
+      tab_spanner(
+        label = "Locations",
+        columns = any_of(c("Elevated", "In", "Out", "Down"))
+      ) %>%
+      cols_align(align = "center", columns = everything()) %>%
+      cols_width(
+        Hitter ~ px(120),
+        Hand ~ px(40),
+        everything() ~ px(65)
+      )
+    
+    # Apply color formatting to pitch type and location columns
+    value_cols <- c(pitch_types, "Elevated", "In", "Out", "Down")
+    value_cols <- value_cols[value_cols %in% names(df)]
+    
+    for (col in value_cols) {
+      # Determine color scale based on metric and perspective
+      if (metric == "whiff") {
+        # Whiff%: lower is better for hitter
+        if (perspective == "hitter") {
+          gt_table <- gt_table %>%
+            data_color(
+              columns = all_of(col),
+              fn = function(x) {
+                scales::col_numeric(
+                  palette = c("#1A9850", "#91CF60", "#FFFFBF", "#FC8D59", "#D73027"),
+                  domain = c(0, 50),
+                  na.color = "#E0E0E0"
+                )(x)
+              }
+            )
+        } else {
+          gt_table <- gt_table %>%
+            data_color(
+              columns = all_of(col),
+              fn = function(x) {
+                scales::col_numeric(
+                  palette = c("#D73027", "#FC8D59", "#FFFFBF", "#91CF60", "#1A9850"),
+                  domain = c(0, 50),
+                  na.color = "#E0E0E0"
+                )(x)
+              }
+            )
+        }
+      } else if (metric %in% c("slg", "woba")) {
+        # SLG/wOBA: higher is better for hitter
+        if (perspective == "hitter") {
+          gt_table <- gt_table %>%
+            data_color(
+              columns = all_of(col),
+              fn = function(x) {
+                scales::col_numeric(
+                  palette = c("#D73027", "#FC8D59", "#FFFFBF", "#91CF60", "#1A9850"),
+                  domain = c(0.1, 0.6),
+                  na.color = "#E0E0E0"
+                )(x)
+              }
+            )
+        } else {
+          gt_table <- gt_table %>%
+            data_color(
+              columns = all_of(col),
+              fn = function(x) {
+                scales::col_numeric(
+                  palette = c("#1A9850", "#91CF60", "#FFFFBF", "#FC8D59", "#D73027"),
+                  domain = c(0.1, 0.6),
+                  na.color = "#E0E0E0"
+                )(x)
+              }
+            )
+        }
+      } else {
+        # RV/100: positive is better for hitter
+        if (perspective == "hitter") {
+          gt_table <- gt_table %>%
+            data_color(
+              columns = all_of(col),
+              fn = function(x) {
+                scales::col_numeric(
+                  palette = c("#D73027", "#FC8D59", "#FFFFBF", "#91CF60", "#1A9850"),
+                  domain = c(-3, 3),
+                  na.color = "#E0E0E0"
+                )(x)
+              }
+            )
+        } else {
+          gt_table <- gt_table %>%
+            data_color(
+              columns = all_of(col),
+              fn = function(x) {
+                scales::col_numeric(
+                  palette = c("#1A9850", "#91CF60", "#FFFFBF", "#FC8D59", "#D73027"),
+                  domain = c(-3, 3),
+                  na.color = "#E0E0E0"
+                )(x)
+              }
+            )
+        }
+      }
+    }
+    
+    # Format numbers
+    if (metric == "whiff") {
+      gt_table <- gt_table %>%
+        fmt_number(columns = any_of(value_cols), decimals = 1, pattern = "{x}%")
+    } else if (metric %in% c("slg", "woba")) {
+      gt_table <- gt_table %>%
+        fmt_number(columns = any_of(value_cols), decimals = 3)
+    } else {
+      gt_table <- gt_table %>%
+        fmt_number(columns = any_of(value_cols), decimals = 2, force_sign = TRUE)
+    }
+    
+    # Replace NA with "-"
+    gt_table <- gt_table %>%
+      sub_missing(missing_text = "-") %>%
+      tab_style(
+        style = cell_text(weight = "bold", size = px(11)),
+        locations = cells_stub()
+      ) %>%
+      tab_style(
+        style = cell_text(weight = "bold", size = px(10)),
+        locations = cells_column_labels()
+      ) %>%
+      tab_style(
+        style = cell_text(size = px(12), weight = "bold"),
+        locations = cells_body()
+      ) %>%
+      tab_options(
+        table.font.size = px(11),
+        data_row.padding = px(5),
+        table.width = pct(100)
+      ) %>%
+      tab_footnote(
+        footnote = "In/Out locations are relative to batter stance (adjusted for handedness matchup)",
+        locations = cells_column_spanners(spanners = "Locations")
+      )
+    
+    gt_table
+  })
+  
+  # Download pitch type matrix as PNG
+  output$download_pitch_matrix_png <- downloadHandler(
+    filename = function() {
+      paste0("Pitch_Type_Matrix_", gsub(" ", "_", input$pitch_matrix_pitcher), "_", format(Sys.Date(), "%Y%m%d"), ".png")
+    },
+    content = function(file) {
+      matrix_result <- pitch_type_matrix_data()
+      if (is.null(matrix_result)) {
+        showNotification("Please set up the pitch type matrix first", type = "error")
+        return()
+      }
+      
+      df <- matrix_result$data
+      pitch_types <- matrix_result$pitch_types
+      metric <- matrix_result$metric
+      perspective <- input$pitch_matrix_color
+      
+      metric_label <- switch(metric,
+        "rv100" = "RV/100",
+        "whiff" = "Whiff%",
+        "slg" = "SLG",
+        "woba" = "wOBA",
+        "RV/100"
+      )
+      
+      display_cols <- c("Hitter", "Hand", pitch_types, "Elevated", "In", "Out", "Down")
+      display_cols <- display_cols[display_cols %in% names(df)]
+      
+      gt_df <- df %>% select(all_of(display_cols))
+      
+      gt_table <- gt_df %>%
+        gt(rowname_col = "Hitter") %>%
+        tab_header(
+          title = md(paste0("**Pitch Type Matrix: ", input$pitch_matrix_pitcher, "**")),
+          subtitle = paste0("Metric: ", metric_label, " | ", format(Sys.Date(), "%B %d, %Y"))
+        ) %>%
+        tab_spanner(label = "Pitch Types", columns = any_of(pitch_types)) %>%
+        tab_spanner(label = "Locations", columns = any_of(c("Elevated", "In", "Out", "Down"))) %>%
+        cols_align(align = "center", columns = everything()) %>%
+        sub_missing(missing_text = "-") %>%
+        tab_style(style = cell_text(weight = "bold", size = px(11)), locations = cells_stub()) %>%
+        tab_style(style = cell_text(weight = "bold", size = px(10)), locations = cells_column_labels()) %>%
+        tab_style(style = cell_text(size = px(12), weight = "bold"), locations = cells_body()) %>%
+        tab_options(table.font.size = px(11), data_row.padding = px(5))
+      
+      gtsave(gt_table, file)
+      showNotification("Pitch Type Matrix PNG saved!", type = "message")
+    }
+  )
   
   # --------------------------------------------------------
   # PITCHER CHARTS TAB
