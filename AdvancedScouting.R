@@ -1804,6 +1804,8 @@ create_mini_spray <- function(tm_data, batter_name, filter_type = "all", filter_
   if (filter_type == "hand" && !is.null(filter_value)) {
     chart_data <- chart_data %>% filter(PitcherThrows == filter_value)
   } else if (filter_type == "strikes" && !is.null(filter_value)) {
+    # Handle NA values in Strikes column
+    chart_data <- chart_data %>% filter(!is.na(Strikes))
     if (filter_value == "0-1") {
       chart_data <- chart_data %>% filter(Strikes %in% c(0, 1))
     } else if (filter_value == "2") {
@@ -1811,9 +1813,9 @@ create_mini_spray <- function(tm_data, batter_name, filter_type = "all", filter_
     }
   }
   
-  if (nrow(chart_data) < 3) {
+  if (nrow(chart_data) < 1) {
     return(ggplot() + theme_void() + 
-             annotate("text", x = 0, y = 150, label = paste0("n=", nrow(chart_data)), 
+             annotate("text", x = 0, y = 150, label = "n=0", 
                       size = 2, color = "gray50"))
   }
   
@@ -1838,7 +1840,8 @@ create_mini_spray <- function(tm_data, batter_name, filter_type = "all", filter_
   
   n_bip <- nrow(chart_data)
   n_hits <- sum(chart_data$event_type %in% c("1B", "2B", "3B", "HR"))
-  ba <- round(n_hits / n_bip, 3)
+  ba <- if (n_bip > 0) round(n_hits / n_bip, 3) else 0
+  ba_str <- sprintf("%03d", as.integer(ba * 1000))
   
   ggplot(chart_data, aes(x, y)) +
     # Foul lines
@@ -1853,7 +1856,7 @@ create_mini_spray <- function(tm_data, batter_name, filter_type = "all", filter_
     # Data points
     geom_point(aes(fill = event_type), shape = 21, size = 1.5, color = "black", stroke = 0.2) +
     # Stats label
-    annotate("text", x = 0, y = -15, label = paste0(n_bip, " | .", sprintf("%03d", ba * 1000)),
+    annotate("text", x = 0, y = -15, label = paste0(n_bip, " | .", ba_str),
              size = 2, fontface = "bold") +
     scale_fill_manual(values = event_colors, guide = "none") +
     coord_fixed(xlim = c(-280, 280), ylim = c(-30, 350)) +
@@ -3560,7 +3563,7 @@ build_matchup_matrix <- function(pitchers, hitters) {
     ungroup()
 }
 
-# Build Pitch Type Matrix - shows hitter performance vs each pitch type and location
+# Build Pitch Type Matrix - shows hitter performance vs each pitch type
 build_pitch_type_matrix <- function(pitcher_name, hitter_names, metric = "rv100") {
   if (is.null(pitcher_name) || length(hitter_names) == 0) return(NULL)
   
@@ -3628,114 +3631,8 @@ build_pitch_type_matrix <- function(pitcher_name, hitter_names, metric = "rv100"
       }
     }
     
-    # === LOCATION-BASED COLUMNS ===
-    # Determine "In" and "Out" based on pitcher and batter handedness
-    # Same-side matchup (RHP vs RHH or LHP vs LHH): Inside = negative PlateLocSide
-    # Opposite-side matchup (RHP vs LHH or LHP vs RHH): Inside = positive PlateLocSide
-    same_side <- (p_hand == "Right" && h_hand == "Right") || (p_hand == "Left" && h_hand == "Left")
-    
-    # Filter to pitches with location data
-    loc_data <- h_data %>%
-      filter(PitcherThrows == p_hand, !is.na(PlateLocSide), !is.na(PlateLocHeight))
-    
-    if (nrow(loc_data) >= 10) {
-      # Elevated: top 1/3 of zone and above (PlateLocHeight >= 2.8)
-      elevated_data <- loc_data %>% filter(PlateLocHeight >= 2.8)
-      if (nrow(elevated_data) >= 5) {
-        rv_elev <- (sum(elevated_data$totalbases, na.rm = TRUE) * 0.3 + 
-                    sum(elevated_data$KorBB == "Walk", na.rm = TRUE) * 0.3 -
-                    sum(elevated_data$KorBB == "Strikeout", na.rm = TRUE) * 0.25 -
-                    sum(elevated_data$PlayResult == "Out", na.rm = TRUE) * 0.1) / nrow(elevated_data) * 100
-        whiff_elev <- if (sum(elevated_data$SwingIndicator, na.rm = TRUE) >= 5) 
-          round(sum(elevated_data$WhiffIndicator, na.rm = TRUE) / sum(elevated_data$SwingIndicator, na.rm = TRUE) * 100, 1) else NA
-        slg_elev <- if (sum(elevated_data$ABindicator, na.rm = TRUE) >= 3)
-          round(sum(elevated_data$totalbases, na.rm = TRUE) / sum(elevated_data$ABindicator, na.rm = TRUE), 3) else NA
-        
-        row_data[["Elevated"]] <- switch(metric, "rv100" = round(rv_elev, 2), "whiff" = whiff_elev, "slg" = slg_elev, round(rv_elev, 2))
-        row_data[["Elevated_n"]] <- nrow(elevated_data)
-      } else {
-        row_data[["Elevated"]] <- NA
-        row_data[["Elevated_n"]] <- nrow(elevated_data)
-      }
-      
-      # Down: bottom 1/3 of zone and below (PlateLocHeight <= 2.0)
-      down_data <- loc_data %>% filter(PlateLocHeight <= 2.0)
-      if (nrow(down_data) >= 5) {
-        rv_down <- (sum(down_data$totalbases, na.rm = TRUE) * 0.3 + 
-                    sum(down_data$KorBB == "Walk", na.rm = TRUE) * 0.3 -
-                    sum(down_data$KorBB == "Strikeout", na.rm = TRUE) * 0.25 -
-                    sum(down_data$PlayResult == "Out", na.rm = TRUE) * 0.1) / nrow(down_data) * 100
-        whiff_down <- if (sum(down_data$SwingIndicator, na.rm = TRUE) >= 5) 
-          round(sum(down_data$WhiffIndicator, na.rm = TRUE) / sum(down_data$SwingIndicator, na.rm = TRUE) * 100, 1) else NA
-        slg_down <- if (sum(down_data$ABindicator, na.rm = TRUE) >= 3)
-          round(sum(down_data$totalbases, na.rm = TRUE) / sum(down_data$ABindicator, na.rm = TRUE), 3) else NA
-        
-        row_data[["Down"]] <- switch(metric, "rv100" = round(rv_down, 2), "whiff" = whiff_down, "slg" = slg_down, round(rv_down, 2))
-        row_data[["Down_n"]] <- nrow(down_data)
-      } else {
-        row_data[["Down"]] <- NA
-        row_data[["Down_n"]] <- nrow(down_data)
-      }
-      
-      # Inside: toward the batter (conditional on handedness)
-      # Same-side: inside = PlateLocSide < -0.3 (catcher's view, toward batter)
-      # Opposite-side: inside = PlateLocSide > 0.3
-      if (same_side) {
-        inside_data <- loc_data %>% filter(PlateLocSide < -0.3)
-      } else {
-        inside_data <- loc_data %>% filter(PlateLocSide > 0.3)
-      }
-      
-      if (nrow(inside_data) >= 5) {
-        rv_in <- (sum(inside_data$totalbases, na.rm = TRUE) * 0.3 + 
-                  sum(inside_data$KorBB == "Walk", na.rm = TRUE) * 0.3 -
-                  sum(inside_data$KorBB == "Strikeout", na.rm = TRUE) * 0.25 -
-                  sum(inside_data$PlayResult == "Out", na.rm = TRUE) * 0.1) / nrow(inside_data) * 100
-        whiff_in <- if (sum(inside_data$SwingIndicator, na.rm = TRUE) >= 5) 
-          round(sum(inside_data$WhiffIndicator, na.rm = TRUE) / sum(inside_data$SwingIndicator, na.rm = TRUE) * 100, 1) else NA
-        slg_in <- if (sum(inside_data$ABindicator, na.rm = TRUE) >= 3)
-          round(sum(inside_data$totalbases, na.rm = TRUE) / sum(inside_data$ABindicator, na.rm = TRUE), 3) else NA
-        
-        row_data[["In"]] <- switch(metric, "rv100" = round(rv_in, 2), "whiff" = whiff_in, "slg" = slg_in, round(rv_in, 2))
-        row_data[["In_n"]] <- nrow(inside_data)
-      } else {
-        row_data[["In"]] <- NA
-        row_data[["In_n"]] <- nrow(inside_data)
-      }
-      
-      # Outside: away from batter (conditional on handedness)
-      if (same_side) {
-        outside_data <- loc_data %>% filter(PlateLocSide > 0.3)
-      } else {
-        outside_data <- loc_data %>% filter(PlateLocSide < -0.3)
-      }
-      
-      if (nrow(outside_data) >= 5) {
-        rv_out <- (sum(outside_data$totalbases, na.rm = TRUE) * 0.3 + 
-                   sum(outside_data$KorBB == "Walk", na.rm = TRUE) * 0.3 -
-                   sum(outside_data$KorBB == "Strikeout", na.rm = TRUE) * 0.25 -
-                   sum(outside_data$PlayResult == "Out", na.rm = TRUE) * 0.1) / nrow(outside_data) * 100
-        whiff_out <- if (sum(outside_data$SwingIndicator, na.rm = TRUE) >= 5) 
-          round(sum(outside_data$WhiffIndicator, na.rm = TRUE) / sum(outside_data$SwingIndicator, na.rm = TRUE) * 100, 1) else NA
-        slg_out <- if (sum(outside_data$ABindicator, na.rm = TRUE) >= 3)
-          round(sum(outside_data$totalbases, na.rm = TRUE) / sum(outside_data$ABindicator, na.rm = TRUE), 3) else NA
-        
-        row_data[["Out"]] <- switch(metric, "rv100" = round(rv_out, 2), "whiff" = whiff_out, "slg" = slg_out, round(rv_out, 2))
-        row_data[["Out_n"]] <- nrow(outside_data)
-      } else {
-        row_data[["Out"]] <- NA
-        row_data[["Out_n"]] <- nrow(outside_data)
-      }
-    } else {
-      row_data[["Elevated"]] <- NA
-      row_data[["Down"]] <- NA
-      row_data[["In"]] <- NA
-      row_data[["Out"]] <- NA
-      row_data[["Elevated_n"]] <- 0
-      row_data[["Down_n"]] <- 0
-      row_data[["In_n"]] <- 0
-      row_data[["Out_n"]] <- 0
-    }
+    # Add empty Notes column for matchup notes
+    row_data[["Notes"]] <- ""
     
     results[[h_name]] <- row_data
   }
@@ -4025,10 +3922,10 @@ ui <- fluidPage(
               # Legend
               div(style = "background: #f5f5f5; padding: 10px; border-radius: 6px; margin-bottom: 15px; font-size: 11px;",
                   strong("Legend: "),
-                  "Pitch type columns show hitter performance vs similar pitches. ",
-                  span(style = "color: #e65100; font-weight: bold;", "Location columns: "),
-                  "Elevated (top 1/3 of zone+), In (inside to batter), Out (away from batter), Down (bottom 1/3 of zone+). ",
-                  "In/Out are adjusted for pitcher-batter handedness matchups."
+                  "Pitch type columns show hitter performance vs that exact pitch type. ",
+                  span(style = "color: #1A9850; font-weight: bold;", "Green = good for hitter. "),
+                  span(style = "color: #D73027; font-weight: bold;", "Red = good for pitcher. "),
+                  "Use Notes column for matchup-specific approach."
               ),
               
               # Matrix output
@@ -4564,135 +4461,121 @@ server <- function(input, output, session) {
             )
           ),
           
-          # COL 2: vs RHP - Heatmaps (Fastball/Breaking x Power/SwingDec) + Hit/Out + Movement + Velo
+          # COL 2: vs RHP - Condensed layout
           div(
             style = "background: white; padding: 4px; border-radius: 4px;",
             div(style = "font-weight: bold; font-size: 9px; text-align: center; margin-bottom: 2px; background: #fff3e0; padding: 2px; border-radius: 3px;", "vs RHP"),
             
             # Heatmaps - 2x2 grid: Fastball vs Breaking, Power vs Swing Decisions
             div(
-              style = "display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; margin-bottom: 4px;",
-              # Column 1: Fastball (SI, FC)
+              style = "display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px; margin-bottom: 3px;",
               div(
-                div(style = "font-size: 7px; font-weight: bold; text-align: center; color: #FA8072; margin-bottom: 1px;", "Fastball"),
-                div(style = "font-size: 6px; text-align: center; color: #666;", "(SI, FC)"),
-                div(style = "font-size: 6px; text-align: center; color: #1A9850; margin-top: 2px;", "Power on BIP"),
-                plotOutput(paste0("hm_rhp_power_fb_", safe_name), height = "55px"),
-                div(style = "font-size: 6px; text-align: center; color: #e65100; margin-top: 2px;", "Swing Decisions"),
-                plotOutput(paste0("hm_rhp_swing_fb_", safe_name), height = "55px")
+                div(style = "font-size: 6px; font-weight: bold; text-align: center; color: #FA8072;", "Fastball (SI,FC)"),
+                div(style = "font-size: 5px; text-align: center; color: #1A9850;", "Power"),
+                plotOutput(paste0("hm_rhp_power_fb_", safe_name), height = "48px"),
+                div(style = "font-size: 5px; text-align: center; color: #e65100;", "Swing Dec"),
+                plotOutput(paste0("hm_rhp_swing_fb_", safe_name), height = "48px")
               ),
-              # Column 2: Breaking (SL, CU)
               div(
-                div(style = "font-size: 7px; font-weight: bold; text-align: center; color: #A020F0; margin-bottom: 1px;", "Breaking"),
-                div(style = "font-size: 6px; text-align: center; color: #666;", "(SL, CU)"),
-                div(style = "font-size: 6px; text-align: center; color: #1A9850; margin-top: 2px;", "Power on BIP"),
-                plotOutput(paste0("hm_rhp_power_bb_", safe_name), height = "55px"),
-                div(style = "font-size: 6px; text-align: center; color: #e65100; margin-top: 2px;", "Swing Decisions"),
-                plotOutput(paste0("hm_rhp_swing_bb_", safe_name), height = "55px")
+                div(style = "font-size: 6px; font-weight: bold; text-align: center; color: #A020F0;", "Breaking (SL,CU)"),
+                div(style = "font-size: 5px; text-align: center; color: #1A9850;", "Power"),
+                plotOutput(paste0("hm_rhp_power_bb_", safe_name), height = "48px"),
+                div(style = "font-size: 5px; text-align: center; color: #e65100;", "Swing Dec"),
+                plotOutput(paste0("hm_rhp_swing_bb_", safe_name), height = "48px")
               )
             ),
             
-            # Hit/Out Location Charts - 2x2 grid
-            div(style = "font-size: 7px; font-weight: bold; color: #006F71; margin: 2px 0 2px 0; border-top: 1px solid #eee; padding-top: 2px;", "Hit & Out Locations"),
+            # Combined row: Hit/Out (2x2) + Movement (3 across)
             div(
-              style = "display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px;",
-              div(style = "text-align: center;",
-                  div(style = "font-size: 6px; color: #1A9850;", "Overall Hits"),
-                  plotOutput(paste0("hitout_rhp_hits_", safe_name), height = "60px")),
-              div(style = "text-align: center;",
-                  div(style = "font-size: 6px; color: #D73027;", "Overall Outs"),
-                  plotOutput(paste0("hitout_rhp_outs_", safe_name), height = "60px")),
-              div(style = "text-align: center;",
-                  div(style = "font-size: 6px; color: #1A9850;", "2 Strike Hits"),
-                  plotOutput(paste0("hitout_rhp_2k_hits_", safe_name), height = "60px")),
-              div(style = "text-align: center;",
-                  div(style = "font-size: 6px; color: #D73027;", "2 Strike Outs"),
-                  plotOutput(paste0("hitout_rhp_2k_outs_", safe_name), height = "60px"))
+              style = "display: grid; grid-template-columns: 2fr 3fr; gap: 4px; border-top: 1px solid #eee; padding-top: 2px;",
+              # Hit/Out 2x2
+              div(
+                div(style = "font-size: 6px; font-weight: bold; color: #006F71; margin-bottom: 1px;", "Hit/Out Locations"),
+                div(style = "display: grid; grid-template-columns: 1fr 1fr; gap: 2px;",
+                  div(plotOutput(paste0("hitout_rhp_hits_", safe_name), height = "50px")),
+                  div(plotOutput(paste0("hitout_rhp_outs_", safe_name), height = "50px")),
+                  div(plotOutput(paste0("hitout_rhp_2k_hits_", safe_name), height = "50px")),
+                  div(plotOutput(paste0("hitout_rhp_2k_outs_", safe_name), height = "50px"))
+                )
+              ),
+              # Movement 3 across
+              div(
+                div(style = "font-size: 6px; font-weight: bold; color: #666; margin-bottom: 1px;", "Movement (red=whiff, grn=95EV)"),
+                div(style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px;",
+                  div(style = "text-align: center;",
+                      div(style = "font-size: 5px; color: #FA8072; font-weight: bold;", "FB"),
+                      plotOutput(paste0("mvmt_rhp_fb_", safe_name), height = "55px")),
+                  div(style = "text-align: center;",
+                      div(style = "font-size: 5px; color: #A020F0; font-weight: bold;", "BB"),
+                      plotOutput(paste0("mvmt_rhp_bb_", safe_name), height = "55px")),
+                  div(style = "text-align: center;",
+                      div(style = "font-size: 5px; color: #2E8B57; font-weight: bold;", "OS"),
+                      plotOutput(paste0("mvmt_rhp_os_", safe_name), height = "55px"))
+                )
+              )
             ),
             
-            # Movement Charts
-            div(style = "font-size: 7px; font-weight: bold; color: #666; margin: 4px 0 2px 0; border-top: 1px solid #eee; padding-top: 2px;", "vs RHP Movement (red=whiff, green=95+EV)"),
-            div(
-              style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px;",
-              div(style = "text-align: center;",
-                  div(style = "font-size: 6px; color: #FA8072; font-weight: bold;", "FB"),
-                  plotOutput(paste0("mvmt_rhp_fb_", safe_name), height = "70px")),
-              div(style = "text-align: center;",
-                  div(style = "font-size: 6px; color: #A020F0; font-weight: bold;", "BB"),
-                  plotOutput(paste0("mvmt_rhp_bb_", safe_name), height = "70px")),
-              div(style = "text-align: center;",
-                  div(style = "font-size: 6px; color: #2E8B57; font-weight: bold;", "OS"),
-                  plotOutput(paste0("mvmt_rhp_os_", safe_name), height = "70px"))
-            ),
-            
-            # RHP Velo Splits
-            div(style = "font-size: 7px; font-weight: bold; margin: 3px 0 2px 0; border-top: 1px solid #eee; padding-top: 2px; color: #e65100;", "RHP Velo RV/100"),
+            # Velo Splits
+            div(style = "font-size: 6px; font-weight: bold; margin-top: 2px; color: #e65100;", "Velo RV/100"),
             uiOutput(paste0("velo_splits_rhp_", safe_name))
           ),
           
-          # COL 3: vs LHP - Heatmaps (Fastball/Breaking x Power/SwingDec) + Hit/Out + Movement + Velo
+          # COL 3: vs LHP - Condensed layout
           div(
             style = "background: white; padding: 4px; border-radius: 4px;",
             div(style = "font-weight: bold; font-size: 9px; text-align: center; margin-bottom: 2px; background: #e8f5e9; padding: 2px; border-radius: 3px;", "vs LHP"),
             
             # Heatmaps - 2x2 grid: Fastball vs Breaking, Power vs Swing Decisions
             div(
-              style = "display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; margin-bottom: 4px;",
-              # Column 1: Fastball (SI, FC)
+              style = "display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px; margin-bottom: 3px;",
               div(
-                div(style = "font-size: 7px; font-weight: bold; text-align: center; color: #FA8072; margin-bottom: 1px;", "Fastball"),
-                div(style = "font-size: 6px; text-align: center; color: #666;", "(SI, FC)"),
-                div(style = "font-size: 6px; text-align: center; color: #1A9850; margin-top: 2px;", "Power on BIP"),
-                plotOutput(paste0("hm_lhp_power_fb_", safe_name), height = "55px"),
-                div(style = "font-size: 6px; text-align: center; color: #e65100; margin-top: 2px;", "Swing Decisions"),
-                plotOutput(paste0("hm_lhp_swing_fb_", safe_name), height = "55px")
+                div(style = "font-size: 6px; font-weight: bold; text-align: center; color: #FA8072;", "Fastball (SI,FC)"),
+                div(style = "font-size: 5px; text-align: center; color: #1A9850;", "Power"),
+                plotOutput(paste0("hm_lhp_power_fb_", safe_name), height = "48px"),
+                div(style = "font-size: 5px; text-align: center; color: #e65100;", "Swing Dec"),
+                plotOutput(paste0("hm_lhp_swing_fb_", safe_name), height = "48px")
               ),
-              # Column 2: Breaking (SL, CU)
               div(
-                div(style = "font-size: 7px; font-weight: bold; text-align: center; color: #A020F0; margin-bottom: 1px;", "Breaking"),
-                div(style = "font-size: 6px; text-align: center; color: #666;", "(SL, CU)"),
-                div(style = "font-size: 6px; text-align: center; color: #1A9850; margin-top: 2px;", "Power on BIP"),
-                plotOutput(paste0("hm_lhp_power_bb_", safe_name), height = "55px"),
-                div(style = "font-size: 6px; text-align: center; color: #e65100; margin-top: 2px;", "Swing Decisions"),
-                plotOutput(paste0("hm_lhp_swing_bb_", safe_name), height = "55px")
+                div(style = "font-size: 6px; font-weight: bold; text-align: center; color: #A020F0;", "Breaking (SL,CU)"),
+                div(style = "font-size: 5px; text-align: center; color: #1A9850;", "Power"),
+                plotOutput(paste0("hm_lhp_power_bb_", safe_name), height = "48px"),
+                div(style = "font-size: 5px; text-align: center; color: #e65100;", "Swing Dec"),
+                plotOutput(paste0("hm_lhp_swing_bb_", safe_name), height = "48px")
               )
             ),
             
-            # Hit/Out Location Charts - 2x2 grid
-            div(style = "font-size: 7px; font-weight: bold; color: #006F71; margin: 2px 0 2px 0; border-top: 1px solid #eee; padding-top: 2px;", "Hit & Out Locations"),
+            # Combined row: Hit/Out (2x2) + Movement (3 across)
             div(
-              style = "display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px;",
-              div(style = "text-align: center;",
-                  div(style = "font-size: 6px; color: #1A9850;", "Overall Hits"),
-                  plotOutput(paste0("hitout_lhp_hits_", safe_name), height = "60px")),
-              div(style = "text-align: center;",
-                  div(style = "font-size: 6px; color: #D73027;", "Overall Outs"),
-                  plotOutput(paste0("hitout_lhp_outs_", safe_name), height = "60px")),
-              div(style = "text-align: center;",
-                  div(style = "font-size: 6px; color: #1A9850;", "2 Strike Hits"),
-                  plotOutput(paste0("hitout_lhp_2k_hits_", safe_name), height = "60px")),
-              div(style = "text-align: center;",
-                  div(style = "font-size: 6px; color: #D73027;", "2 Strike Outs"),
-                  plotOutput(paste0("hitout_lhp_2k_outs_", safe_name), height = "60px"))
+              style = "display: grid; grid-template-columns: 2fr 3fr; gap: 4px; border-top: 1px solid #eee; padding-top: 2px;",
+              # Hit/Out 2x2
+              div(
+                div(style = "font-size: 6px; font-weight: bold; color: #006F71; margin-bottom: 1px;", "Hit/Out Locations"),
+                div(style = "display: grid; grid-template-columns: 1fr 1fr; gap: 2px;",
+                  div(plotOutput(paste0("hitout_lhp_hits_", safe_name), height = "50px")),
+                  div(plotOutput(paste0("hitout_lhp_outs_", safe_name), height = "50px")),
+                  div(plotOutput(paste0("hitout_lhp_2k_hits_", safe_name), height = "50px")),
+                  div(plotOutput(paste0("hitout_lhp_2k_outs_", safe_name), height = "50px"))
+                )
+              ),
+              # Movement 3 across
+              div(
+                div(style = "font-size: 6px; font-weight: bold; color: #666; margin-bottom: 1px;", "Movement (red=whiff, grn=95EV)"),
+                div(style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px;",
+                  div(style = "text-align: center;",
+                      div(style = "font-size: 5px; color: #FA8072; font-weight: bold;", "FB"),
+                      plotOutput(paste0("mvmt_lhp_fb_", safe_name), height = "55px")),
+                  div(style = "text-align: center;",
+                      div(style = "font-size: 5px; color: #A020F0; font-weight: bold;", "BB"),
+                      plotOutput(paste0("mvmt_lhp_bb_", safe_name), height = "55px")),
+                  div(style = "text-align: center;",
+                      div(style = "font-size: 5px; color: #2E8B57; font-weight: bold;", "OS"),
+                      plotOutput(paste0("mvmt_lhp_os_", safe_name), height = "55px"))
+                )
+              )
             ),
             
-            # Movement Charts
-            div(style = "font-size: 7px; font-weight: bold; color: #666; margin: 4px 0 2px 0; border-top: 1px solid #eee; padding-top: 2px;", "vs LHP Movement (red=whiff, green=95+EV)"),
-            div(
-              style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px;",
-              div(style = "text-align: center;",
-                  div(style = "font-size: 6px; color: #FA8072; font-weight: bold;", "FB"),
-                  plotOutput(paste0("mvmt_lhp_fb_", safe_name), height = "70px")),
-              div(style = "text-align: center;",
-                  div(style = "font-size: 6px; color: #A020F0; font-weight: bold;", "BB"),
-                  plotOutput(paste0("mvmt_lhp_bb_", safe_name), height = "70px")),
-              div(style = "text-align: center;",
-                  div(style = "font-size: 6px; color: #2E8B57; font-weight: bold;", "OS"),
-                  plotOutput(paste0("mvmt_lhp_os_", safe_name), height = "70px"))
-            ),
-            
-            # LHP Velo Splits
-            div(style = "font-size: 7px; font-weight: bold; margin: 3px 0 2px 0; border-top: 1px solid #eee; padding-top: 2px; color: #2e7d32;", "LHP Velo RV/100"),
+            # Velo Splits
+            div(style = "font-size: 6px; font-weight: bold; margin-top: 2px; color: #2e7d32;", "Velo RV/100"),
             uiOutput(paste0("velo_splits_lhp_", safe_name))
           )
         ),
@@ -6720,7 +6603,7 @@ server <- function(input, output, session) {
     
     # Start building gt table
     # Select only display columns (not the _n columns)
-    display_cols <- c("Hitter", "Hand", pitch_types, "Elevated", "In", "Out", "Down")
+    display_cols <- c("Hitter", "Hand", pitch_types, "Notes")
     display_cols <- display_cols[display_cols %in% names(df)]
     
     gt_df <- df %>% select(all_of(display_cols))
@@ -6736,19 +6619,18 @@ server <- function(input, output, session) {
         label = "Pitch Types",
         columns = any_of(pitch_types)
       ) %>%
-      tab_spanner(
-        label = "Locations",
-        columns = any_of(c("Elevated", "In", "Out", "Down"))
-      ) %>%
-      cols_align(align = "center", columns = everything()) %>%
+      cols_align(align = "center", columns = any_of(c("Hand", pitch_types))) %>%
+      cols_align(align = "left", columns = any_of("Notes")) %>%
       cols_width(
         Hitter ~ px(120),
         Hand ~ px(40),
+        Notes ~ px(200),
         everything() ~ px(65)
-      )
+      ) %>%
+      cols_label(Notes = "Matchup Notes")
     
-    # Apply color formatting to pitch type and location columns
-    value_cols <- c(pitch_types, "Elevated", "In", "Out", "Down")
+    # Apply color formatting to pitch type columns only
+    value_cols <- pitch_types
     value_cols <- value_cols[value_cols %in% names(df)]
     
     for (col in value_cols) {
@@ -6866,12 +6748,12 @@ server <- function(input, output, session) {
       ) %>%
       tab_options(
         table.font.size = px(11),
-        data_row.padding = px(5),
+        data_row.padding = px(8),
         table.width = pct(100)
       ) %>%
       tab_footnote(
-        footnote = "In/Out locations are relative to batter stance (adjusted for handedness matchup)",
-        locations = cells_column_spanners(spanners = "Locations")
+        footnote = "Use Notes column to write matchup-specific approach for each hitter",
+        locations = cells_column_labels(columns = "Notes")
       )
     
     gt_table
@@ -6902,7 +6784,7 @@ server <- function(input, output, session) {
         "RV/100"
       )
       
-      display_cols <- c("Hitter", "Hand", pitch_types, "Elevated", "In", "Out", "Down")
+      display_cols <- c("Hitter", "Hand", pitch_types, "Notes")
       display_cols <- display_cols[display_cols %in% names(df)]
       
       gt_df <- df %>% select(all_of(display_cols))
@@ -6914,13 +6796,13 @@ server <- function(input, output, session) {
           subtitle = paste0("Metric: ", metric_label, " | ", format(Sys.Date(), "%B %d, %Y"))
         ) %>%
         tab_spanner(label = "Pitch Types", columns = any_of(pitch_types)) %>%
-        tab_spanner(label = "Locations", columns = any_of(c("Elevated", "In", "Out", "Down"))) %>%
-        cols_align(align = "center", columns = everything()) %>%
+        cols_align(align = "center", columns = any_of(c("Hand", pitch_types))) %>%
+        cols_label(Notes = "Matchup Notes") %>%
         sub_missing(missing_text = "-") %>%
         tab_style(style = cell_text(weight = "bold", size = px(11)), locations = cells_stub()) %>%
         tab_style(style = cell_text(weight = "bold", size = px(10)), locations = cells_column_labels()) %>%
         tab_style(style = cell_text(size = px(12), weight = "bold"), locations = cells_body()) %>%
-        tab_options(table.font.size = px(11), data_row.padding = px(5))
+        tab_options(table.font.size = px(11), data_row.padding = px(8))
       
       gtsave(gt_table, file)
       showNotification("Pitch Type Matrix PNG saved!", type = "message")
@@ -7869,11 +7751,11 @@ server <- function(input, output, session) {
                         gp = grid::gpar(fontsize = 10, col = "white"))
         
         # === ROW 1: Punish/Struggle ===
-        punishes_text <- if (length(profile$punishes) > 0) paste(profile$punishes, collapse = ", ") else "—"
-        struggles_text <- if (length(profile$struggles) > 0) paste(profile$struggles, collapse = ", ") else "—"
-        grid::grid.text(paste0("✓ Punish: ", punishes_text), x = 0.02, y = 0.92, just = "left",
+        punishes_text <- if (length(profile$punishes) > 0) paste(profile$punishes, collapse = ", ") else "-"
+        struggles_text <- if (length(profile$struggles) > 0) paste(profile$struggles, collapse = ", ") else "-"
+        grid::grid.text(paste0("+ Punish: ", punishes_text), x = 0.02, y = 0.92, just = "left",
                         gp = grid::gpar(fontsize = 9, col = "#1A9850", fontface = "bold"))
-        grid::grid.text(paste0("✗ Struggle: ", struggles_text), x = 0.35, y = 0.92, just = "left",
+        grid::grid.text(paste0("- Struggle: ", struggles_text), x = 0.35, y = 0.92, just = "left",
                         gp = grid::gpar(fontsize = 9, col = "#D73027", fontface = "bold"))
         
         # === COL 1: Grades + Spray Charts (left 15%) ===
@@ -7914,146 +7796,167 @@ server <- function(input, output, session) {
                         gp = grid::gpar(fill = "#fff3e0", col = "#e65100", lwd = 0.5))
         grid::grid.text("vs RHP", x = 0.38, y = 0.88, gp = grid::gpar(fontsize = 10, fontface = "bold", col = "#e65100"))
         
-        # Heatmaps - Whiff% (3 across)
-        hm_w <- 0.10
-        hm_h <- 0.14
-        grid::grid.text("Whiff%", x = 0.22, y = 0.84, just = "left", gp = grid::gpar(fontsize = 7, fontface = "bold"))
+        # Heatmaps - Power + SwingDec for FB and BB (2x2)
+        hm_w <- 0.11
+        hm_h <- 0.12
+        # Fastball (SI, FC) column
+        grid::grid.text("Fastball (SI,FC)", x = 0.27, y = 0.84, gp = grid::gpar(fontsize = 7, fontface = "bold", col = "#FA8072"))
+        grid::grid.text("Power", x = 0.27, y = 0.80, gp = grid::gpar(fontsize = 5, col = "#1A9850"))
+        hm_fb_pwr <- create_metric_heatmap(tm_data, hitter, "FB", "Right", "Power")
+        grid::pushViewport(grid::viewport(x = 0.27, y = 0.72, width = hm_w, height = hm_h, just = c("center", "center")))
+        print(hm_fb_pwr, newpage = FALSE)
+        grid::popViewport()
+        
+        grid::grid.text("SwingDec", x = 0.27, y = 0.64, gp = grid::gpar(fontsize = 5, col = "#e65100"))
+        hm_fb_sw <- create_metric_heatmap(tm_data, hitter, "FB", "Right", "SwingDec")
+        grid::pushViewport(grid::viewport(x = 0.27, y = 0.56, width = hm_w, height = hm_h, just = c("center", "center")))
+        print(hm_fb_sw, newpage = FALSE)
+        grid::popViewport()
+        
+        # Breaking (SL, CU) column
+        grid::grid.text("Breaking (SL,CU)", x = 0.40, y = 0.84, gp = grid::gpar(fontsize = 7, fontface = "bold", col = "#A020F0"))
+        grid::grid.text("Power", x = 0.40, y = 0.80, gp = grid::gpar(fontsize = 5, col = "#1A9850"))
+        hm_bb_pwr <- create_metric_heatmap(tm_data, hitter, "BB", "Right", "Power")
+        grid::pushViewport(grid::viewport(x = 0.40, y = 0.72, width = hm_w, height = hm_h, just = c("center", "center")))
+        print(hm_bb_pwr, newpage = FALSE)
+        grid::popViewport()
+        
+        grid::grid.text("SwingDec", x = 0.40, y = 0.64, gp = grid::gpar(fontsize = 5, col = "#e65100"))
+        hm_bb_sw <- create_metric_heatmap(tm_data, hitter, "BB", "Right", "SwingDec")
+        grid::pushViewport(grid::viewport(x = 0.40, y = 0.56, width = hm_w, height = hm_h, just = c("center", "center")))
+        print(hm_bb_sw, newpage = FALSE)
+        grid::popViewport()
+        
+        # Hit/Out charts (2x2) + Movement (3 across) in same row
+        grid::grid.text("Hit/Out", x = 0.24, y = 0.46, just = "left", gp = grid::gpar(fontsize = 6, fontface = "bold", col = "#006F71"))
+        hitout_w <- 0.065
+        hitout_h <- 0.10
+        hitout_types <- c("rhp_hits", "rhp_outs", "rhp_2k_hits", "rhp_2k_outs")
+        hitout_x <- c(0.23, 0.30, 0.23, 0.30)
+        hitout_y <- c(0.38, 0.38, 0.28, 0.28)
+        for (i in 1:4) {
+          ho <- create_hit_out_chart(tm_data, hitter, hitout_types[i])
+          grid::pushViewport(grid::viewport(x = hitout_x[i], y = hitout_y[i], width = hitout_w, height = hitout_h, just = c("center", "center")))
+          print(ho, newpage = FALSE)
+          grid::popViewport()
+        }
+        
+        # Movement charts (3 across next to hit/out)
+        grid::grid.text("Movement", x = 0.38, y = 0.46, just = "left", gp = grid::gpar(fontsize = 6, fontface = "bold"))
+        mvmt_w <- 0.065
+        mvmt_h <- 0.10
         for (j in 1:3) {
           pf <- c("FB", "BB", "OS")[j]
           col <- c("#FA8072", "#A020F0", "#2E8B57")[j]
-          hm <- create_metric_heatmap(tm_data, hitter, pf, "Right", "Whiff")
-          grid::pushViewport(grid::viewport(x = 0.24 + (j-1)*0.11, y = 0.74, width = hm_w, height = hm_h, just = c("center", "center")))
-          grid::grid.text(pf, y = 1.08, gp = grid::gpar(cex = 0.5, col = col, fontface = "bold"))
-          print(hm, newpage = FALSE)
-          grid::popViewport()
-        }
-        
-        # Heatmaps - xValue (3 across)
-        grid::grid.text("xValue", x = 0.22, y = 0.62, just = "left", gp = grid::gpar(fontsize = 7, fontface = "bold"))
-        for (j in 1:3) {
-          pf <- c("FB", "BB", "OS")[j]
-          hm <- create_metric_heatmap(tm_data, hitter, pf, "Right", "xValue")
-          grid::pushViewport(grid::viewport(x = 0.24 + (j-1)*0.11, y = 0.52, width = hm_w, height = hm_h, just = c("center", "center")))
-          print(hm, newpage = FALSE)
-          grid::popViewport()
-        }
-        
-        # Movement charts - vs RHP (3 across)
-        grid::grid.text("Movement (red=whiff)", x = 0.22, y = 0.40, just = "left", gp = grid::gpar(fontsize = 7, fontface = "bold"))
-        mvmt_w <- 0.10
-        mvmt_h <- 0.12
-        for (j in 1:3) {
-          pf <- c("FB", "BB", "OS")[j]
           mvmt <- create_movement_plot(tm_data, hitter, "Right", pf)
-          grid::pushViewport(grid::viewport(x = 0.24 + (j-1)*0.11, y = 0.32, width = mvmt_w, height = mvmt_h, just = c("center", "center")))
+          grid::pushViewport(grid::viewport(x = 0.38 + (j-1)*0.07, y = 0.34, width = mvmt_w, height = mvmt_h, just = c("center", "center")))
+          grid::grid.text(pf, y = 1.1, gp = grid::gpar(cex = 0.4, col = col, fontface = "bold"))
           print(mvmt, newpage = FALSE)
           grid::popViewport()
         }
         
         # Velo splits text for RHP
         pgs <- profile$pitch_group_stats
-        velo_text_rhp <- "Velo RV: "
+        velo_text_rhp <- "Velo: "
         fb <- pgs[["RHP_FB"]]
         if (!is.null(fb) && !is.null(fb$key_splits[["Hard"]])) {
           velo_text_rhp <- paste0(velo_text_rhp, "FB92+:", sprintf("%+.1f", fb$key_splits[["Hard"]]$rv100), " ")
+        }
+        if (!is.null(fb) && !is.null(fb$key_splits[["Soft"]])) {
+          velo_text_rhp <- paste0(velo_text_rhp, "FB<88:", sprintf("%+.1f", fb$key_splits[["Soft"]]$rv100), " ")
         }
         bb <- pgs[["RHP_BB"]]
         if (!is.null(bb) && !is.null(bb$key_splits[["HardBB"]])) {
           velo_text_rhp <- paste0(velo_text_rhp, "BB84+:", sprintf("%+.1f", bb$key_splits[["HardBB"]]$rv100), " ")
         }
-        grid::grid.text(velo_text_rhp, x = 0.22, y = 0.24, just = "left", gp = grid::gpar(fontsize = 7, col = "#e65100"))
+        if (!is.null(bb) && !is.null(bb$key_splits[["SoftBB"]])) {
+          velo_text_rhp <- paste0(velo_text_rhp, "BB<76:", sprintf("%+.1f", bb$key_splits[["SoftBB"]]$rv100), " ")
+        }
+        grid::grid.text(velo_text_rhp, x = 0.22, y = 0.22, just = "left", gp = grid::gpar(fontsize = 6, col = "#e65100"))
         
         # === COL 3: vs LHP Section (35% width) ===
         grid::grid.rect(x = 0.73, y = 0.88, width = 0.34, height = 0.015, just = c("center", "center"),
                         gp = grid::gpar(fill = "#e8f5e9", col = "#2e7d32", lwd = 0.5))
         grid::grid.text("vs LHP", x = 0.73, y = 0.88, gp = grid::gpar(fontsize = 10, fontface = "bold", col = "#2e7d32"))
         
-        # Heatmaps - Whiff% (3 across)
-        grid::grid.text("Whiff%", x = 0.57, y = 0.84, just = "left", gp = grid::gpar(fontsize = 7, fontface = "bold"))
+        # Heatmaps - Power + SwingDec for FB and BB (2x2)
+        # Fastball (SI, FC) column
+        grid::grid.text("Fastball (SI,FC)", x = 0.62, y = 0.84, gp = grid::gpar(fontsize = 7, fontface = "bold", col = "#FA8072"))
+        grid::grid.text("Power", x = 0.62, y = 0.80, gp = grid::gpar(fontsize = 5, col = "#1A9850"))
+        hm_fb_pwr_lhp <- create_metric_heatmap(tm_data, hitter, "FB", "Left", "Power")
+        grid::pushViewport(grid::viewport(x = 0.62, y = 0.72, width = hm_w, height = hm_h, just = c("center", "center")))
+        print(hm_fb_pwr_lhp, newpage = FALSE)
+        grid::popViewport()
+        
+        grid::grid.text("SwingDec", x = 0.62, y = 0.64, gp = grid::gpar(fontsize = 5, col = "#e65100"))
+        hm_fb_sw_lhp <- create_metric_heatmap(tm_data, hitter, "FB", "Left", "SwingDec")
+        grid::pushViewport(grid::viewport(x = 0.62, y = 0.56, width = hm_w, height = hm_h, just = c("center", "center")))
+        print(hm_fb_sw_lhp, newpage = FALSE)
+        grid::popViewport()
+        
+        # Breaking (SL, CU) column
+        grid::grid.text("Breaking (SL,CU)", x = 0.75, y = 0.84, gp = grid::gpar(fontsize = 7, fontface = "bold", col = "#A020F0"))
+        grid::grid.text("Power", x = 0.75, y = 0.80, gp = grid::gpar(fontsize = 5, col = "#1A9850"))
+        hm_bb_pwr_lhp <- create_metric_heatmap(tm_data, hitter, "BB", "Left", "Power")
+        grid::pushViewport(grid::viewport(x = 0.75, y = 0.72, width = hm_w, height = hm_h, just = c("center", "center")))
+        print(hm_bb_pwr_lhp, newpage = FALSE)
+        grid::popViewport()
+        
+        grid::grid.text("SwingDec", x = 0.75, y = 0.64, gp = grid::gpar(fontsize = 5, col = "#e65100"))
+        hm_bb_sw_lhp <- create_metric_heatmap(tm_data, hitter, "BB", "Left", "SwingDec")
+        grid::pushViewport(grid::viewport(x = 0.75, y = 0.56, width = hm_w, height = hm_h, just = c("center", "center")))
+        print(hm_bb_sw_lhp, newpage = FALSE)
+        grid::popViewport()
+        
+        # Hit/Out charts (2x2) + Movement (3 across) in same row
+        grid::grid.text("Hit/Out", x = 0.59, y = 0.46, just = "left", gp = grid::gpar(fontsize = 6, fontface = "bold", col = "#006F71"))
+        lhp_hitout_types <- c("lhp_hits", "lhp_outs", "lhp_2k_hits", "lhp_2k_outs")
+        lhp_hitout_x <- c(0.58, 0.65, 0.58, 0.65)
+        lhp_hitout_y <- c(0.38, 0.38, 0.28, 0.28)
+        for (i in 1:4) {
+          ho <- create_hit_out_chart(tm_data, hitter, lhp_hitout_types[i])
+          grid::pushViewport(grid::viewport(x = lhp_hitout_x[i], y = lhp_hitout_y[i], width = hitout_w, height = hitout_h, just = c("center", "center")))
+          print(ho, newpage = FALSE)
+          grid::popViewport()
+        }
+        
+        # Movement charts (3 across next to hit/out)
+        grid::grid.text("Movement", x = 0.73, y = 0.46, just = "left", gp = grid::gpar(fontsize = 6, fontface = "bold"))
         for (j in 1:3) {
           pf <- c("FB", "BB", "OS")[j]
           col <- c("#FA8072", "#A020F0", "#2E8B57")[j]
-          hm <- create_metric_heatmap(tm_data, hitter, pf, "Left", "Whiff")
-          grid::pushViewport(grid::viewport(x = 0.59 + (j-1)*0.11, y = 0.74, width = hm_w, height = hm_h, just = c("center", "center")))
-          grid::grid.text(pf, y = 1.08, gp = grid::gpar(cex = 0.5, col = col, fontface = "bold"))
-          print(hm, newpage = FALSE)
-          grid::popViewport()
-        }
-        
-        # Heatmaps - xValue (3 across)
-        grid::grid.text("xValue", x = 0.57, y = 0.62, just = "left", gp = grid::gpar(fontsize = 7, fontface = "bold"))
-        for (j in 1:3) {
-          pf <- c("FB", "BB", "OS")[j]
-          hm <- create_metric_heatmap(tm_data, hitter, pf, "Left", "xValue")
-          grid::pushViewport(grid::viewport(x = 0.59 + (j-1)*0.11, y = 0.52, width = hm_w, height = hm_h, just = c("center", "center")))
-          print(hm, newpage = FALSE)
-          grid::popViewport()
-        }
-        
-        # Movement charts - vs LHP (3 across)
-        grid::grid.text("Movement (red=whiff)", x = 0.57, y = 0.40, just = "left", gp = grid::gpar(fontsize = 7, fontface = "bold"))
-        for (j in 1:3) {
-          pf <- c("FB", "BB", "OS")[j]
           mvmt <- create_movement_plot(tm_data, hitter, "Left", pf)
-          grid::pushViewport(grid::viewport(x = 0.59 + (j-1)*0.11, y = 0.32, width = mvmt_w, height = mvmt_h, just = c("center", "center")))
+          grid::pushViewport(grid::viewport(x = 0.73 + (j-1)*0.07, y = 0.34, width = mvmt_w, height = mvmt_h, just = c("center", "center")))
+          grid::grid.text(pf, y = 1.1, gp = grid::gpar(cex = 0.4, col = col, fontface = "bold"))
           print(mvmt, newpage = FALSE)
           grid::popViewport()
         }
         
         # Velo splits text for LHP
-        velo_text_lhp <- "Velo RV: "
+        velo_text_lhp <- "Velo: "
         fb_lhp <- pgs[["LHP_FB"]]
         if (!is.null(fb_lhp) && !is.null(fb_lhp$key_splits[["Hard"]])) {
           velo_text_lhp <- paste0(velo_text_lhp, "FB92+:", sprintf("%+.1f", fb_lhp$key_splits[["Hard"]]$rv100), " ")
+        }
+        if (!is.null(fb_lhp) && !is.null(fb_lhp$key_splits[["Soft"]])) {
+          velo_text_lhp <- paste0(velo_text_lhp, "FB<88:", sprintf("%+.1f", fb_lhp$key_splits[["Soft"]]$rv100), " ")
         }
         bb_lhp <- pgs[["LHP_BB"]]
         if (!is.null(bb_lhp) && !is.null(bb_lhp$key_splits[["HardBB"]])) {
           velo_text_lhp <- paste0(velo_text_lhp, "BB84+:", sprintf("%+.1f", bb_lhp$key_splits[["HardBB"]]$rv100), " ")
         }
-        grid::grid.text(velo_text_lhp, x = 0.57, y = 0.24, just = "left", gp = grid::gpar(fontsize = 7, col = "#2e7d32"))
+        if (!is.null(bb_lhp) && !is.null(bb_lhp$key_splits[["SoftBB"]])) {
+          velo_text_lhp <- paste0(velo_text_lhp, "BB<76:", sprintf("%+.1f", bb_lhp$key_splits[["SoftBB"]]$rv100), " ")
+        }
+        grid::grid.text(velo_text_lhp, x = 0.57, y = 0.22, just = "left", gp = grid::gpar(fontsize = 6, col = "#2e7d32"))
         
-        # === ROW 3: Hit/Out Location Charts (bottom) ===
-        grid::grid.text("Hit & Out Locations (FB=red, BB=purple, OS=green)", x = 0.25, y = 0.18, 
-                        gp = grid::gpar(fontsize = 8, fontface = "bold", col = "#006F71"))
-        
-        hitout_w <- 0.10
-        hitout_h <- 0.14
-        
-        # Overall Hits
-        hitout_hits <- create_hit_out_chart(tm_data, hitter, "overall_hits")
-        grid::pushViewport(grid::viewport(x = 0.15, y = 0.10, width = hitout_w, height = hitout_h, just = c("center", "center")))
-        grid::grid.text("Overall Hits", y = 1.08, gp = grid::gpar(cex = 0.5))
-        print(hitout_hits, newpage = FALSE)
-        grid::popViewport()
-        
-        # Overall Outs
-        hitout_outs <- create_hit_out_chart(tm_data, hitter, "overall_outs")
-        grid::pushViewport(grid::viewport(x = 0.26, y = 0.10, width = hitout_w, height = hitout_h, just = c("center", "center")))
-        grid::grid.text("Overall Outs", y = 1.08, gp = grid::gpar(cex = 0.5))
-        print(hitout_outs, newpage = FALSE)
-        grid::popViewport()
-        
-        # 2K Hits
-        hitout_2k_hits <- create_hit_out_chart(tm_data, hitter, "2k_hits")
-        grid::pushViewport(grid::viewport(x = 0.37, y = 0.10, width = hitout_w, height = hitout_h, just = c("center", "center")))
-        grid::grid.text("2K Hits", y = 1.08, gp = grid::gpar(cex = 0.5))
-        print(hitout_2k_hits, newpage = FALSE)
-        grid::popViewport()
-        
-        # 2K Outs
-        hitout_2k_outs <- create_hit_out_chart(tm_data, hitter, "2k_outs")
-        grid::pushViewport(grid::viewport(x = 0.48, y = 0.10, width = hitout_w, height = hitout_h, just = c("center", "center")))
-        grid::grid.text("2K Outs", y = 1.08, gp = grid::gpar(cex = 0.5))
-        print(hitout_2k_outs, newpage = FALSE)
-        grid::popViewport()
-        
-        # === Pitch Plan Notes Box (right side of bottom) ===
-        grid::grid.text("Pitch Plan", x = 0.65, y = 0.18, gp = grid::gpar(fontsize = 8, fontface = "bold", col = "#006F71"))
-        grid::grid.rect(x = 0.78, y = 0.10, width = 0.35, height = 0.14, just = c("center", "center"),
+        # === Pitch Plan Notes Box (bottom) ===
+        grid::grid.rect(x = 0.5, y = 0.10, width = 0.94, height = 0.14, just = c("center", "center"),
                         gp = grid::gpar(fill = "white", col = "#ddd", lwd = 0.5))
-        grid::grid.text("Overall:", x = 0.62, y = 0.14, just = "left", gp = grid::gpar(fontsize = 6, fontface = "bold"))
-        grid::grid.text("vs RHP:", x = 0.62, y = 0.10, just = "left", gp = grid::gpar(fontsize = 6, fontface = "bold", col = "#e65100"))
-        grid::grid.text("vs LHP:", x = 0.62, y = 0.06, just = "left", gp = grid::gpar(fontsize = 6, fontface = "bold", col = "#2e7d32"))
+        grid::grid.text("Pitch Plan", x = 0.04, y = 0.16, just = "left", gp = grid::gpar(fontsize = 8, fontface = "bold", col = "#006F71"))
+        grid::grid.text("Overall:", x = 0.04, y = 0.12, just = "left", gp = grid::gpar(fontsize = 7, fontface = "bold"))
+        grid::grid.text("vs RHP:", x = 0.35, y = 0.12, just = "left", gp = grid::gpar(fontsize = 7, fontface = "bold", col = "#e65100"))
+        grid::grid.text("vs LHP:", x = 0.65, y = 0.12, just = "left", gp = grid::gpar(fontsize = 7, fontface = "bold", col = "#2e7d32"))
         
         # Footer
         grid::grid.text(format(Sys.Date(), "%B %d, %Y"), x = 0.97, y = 0.02, just = "right",
