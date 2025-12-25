@@ -3467,20 +3467,20 @@ server <- function(input, output, session) {
       rs <- profile$raw_stats_overall
       safe_name <- gsub("[^A-Za-z0-9]", "", h_name)
       
-      # COMPACT CARD
+      # ULTRA-COMPACT CARD
       div(
         style = paste0(
           "border: 2px solid ", border_color, "; ",
-          "border-radius: 6px; ",
-          "margin-bottom: 6px; ",
-          "padding: 6px; ",
+          "border-radius: 5px; ",
+          "margin-bottom: 4px; ",
+          "padding: 4px; ",
           "background: #fafafa; ",
           "font-size: 10px;"
         ),
         
         # ROW 1: Header with name, stats bar, and badges
         div(
-          style = "display: grid; grid-template-columns: 180px 1fr auto; gap: 8px; align-items: center; margin-bottom: 4px; padding-bottom: 4px; border-bottom: 1px solid #ddd;",
+          style = "display: grid; grid-template-columns: 170px 1fr auto; gap: 6px; align-items: center; margin-bottom: 3px; padding-bottom: 3px; border-bottom: 1px solid #ddd;",
           
           # Name + sample + RV + Hot/Cold
           div(
@@ -3539,249 +3539,267 @@ server <- function(input, output, session) {
           )
         ),
         
-        # ROW 2: Main content - 3 columns (Grades | RHP Section | LHP Section) with movement + velo under heatmaps
+        # ROW 2: Main content - 3 columns (Grades | RHP Section | LHP Section) - all charts in one row
         div(
-          style = "display: grid; grid-template-columns: 150px 1fr 1fr; gap: 8px;",
+          style = "display: grid; grid-template-columns: 140px 1fr 1fr; gap: 4px;",
           
-          # COL 1: Grades + Spray Charts
+          # COL 1: Grades + Spray Charts - compact
           div(
-            # Punishes/Struggles
-            div(style = "font-size: 9px; margin-bottom: 4px;",
-                span(style = "color: #1A9850; font-weight: bold;", "Punish: "), span(punishes_text),
+            # Punishes/Struggles - inline
+            div(style = "font-size: 8px; margin-bottom: 2px;",
+                span(style = "color: #1A9850; font-weight: bold;", "✓ "), span(punishes_text),
                 br(),
-                span(style = "color: #D73027; font-weight: bold;", "Struggle: "), span(struggles_text)
+                span(style = "color: #D73027; font-weight: bold;", "✗ "), span(struggles_text)
             ),
-            # Count Insights
+            # Count Insights - compact
             if (length(profile$count_insights) > 0 || length(profile$pitch_count_recs) > 0) {
-              div(style = "font-size: 8px; margin-bottom: 4px; padding: 3px; background: #f0f8ff; border-radius: 3px; border-left: 2px solid #006F71;",
-                  div(style = "font-weight: bold; color: #006F71; margin-bottom: 2px;", "Count Analysis"),
+              div(style = "font-size: 7px; margin-bottom: 2px; padding: 2px; background: #f0f8ff; border-radius: 2px; border-left: 2px solid #006F71;",
                   if (length(profile$count_insights) > 0) {
-                    lapply(profile$count_insights, function(insight) {
-                      div(style = "font-size: 7px; color: #333; margin-left: 4px;", paste0("• ", insight))
+                    lapply(profile$count_insights[1:min(2, length(profile$count_insights))], function(insight) {
+                      div(style = "font-size: 6px; color: #333;", paste0("• ", insight))
                     })
                   },
                   if (length(profile$pitch_count_recs) > 0) {
-                    lapply(names(profile$pitch_count_recs), function(fam) {
+                    lapply(names(profile$pitch_count_recs)[1:min(2, length(profile$pitch_count_recs))], function(fam) {
                       rec <- profile$pitch_count_recs[[fam]]
                       color <- switch(fam, "FB" = "#1f77b4", "BB" = "#9370DB", "OS" = "#2E8B57", "#666")
-                      div(style = paste0("font-size: 7px; color: ", color, "; margin-left: 4px; font-weight: bold;"), 
+                      div(style = paste0("font-size: 6px; color: ", color, "; font-weight: bold;"), 
                           paste0("→ ", rec))
                     })
                   }
               )
             },
-            # Grades - Now with 5 columns: Raw PWR, Game PWR, CON, AvK, DEC
+            # Grades - compact
             div(
-              style = "display: grid; grid-template-columns: 30px repeat(5, 1fr); gap: 2px; font-size: 7px; margin-bottom: 6px;",
-              div(), div(style = "text-align: center;", "Raw"), div(style = "text-align: center;", "Game"), 
-              div(style = "text-align: center;", "CON"), div(style = "text-align: center;", "AvK"), div(style = "text-align: center;", "DEC"),
-              div(style = "font-weight: bold;", "RHP"),
-              div(style = paste0("background: ", grade_color(profile$rhp_raw_power), "; text-align: center; padding: 2px; border-radius: 2px; font-weight: bold;"), profile$rhp_raw_power),
-              div(style = paste0("background: ", grade_color(profile$rhp_power), "; text-align: center; padding: 2px; border-radius: 2px; font-weight: bold;"), profile$rhp_power),
-              div(style = paste0("background: ", grade_color(profile$rhp_contact), "; text-align: center; padding: 2px; border-radius: 2px; font-weight: bold;"), profile$rhp_contact),
-              div(style = paste0("background: ", grade_color(profile$rhp_avoid_k), "; text-align: center; padding: 2px; border-radius: 2px; font-weight: bold;"), profile$rhp_avoid_k),
-              div(style = paste0("background: ", grade_color(profile$rhp_swing_dec), "; text-align: center; padding: 2px; border-radius: 2px; font-weight: bold;"), profile$rhp_swing_dec),
-              div(style = "font-weight: bold;", "LHP"),
-              div(style = paste0("background: ", grade_color(profile$lhp_raw_power), "; text-align: center; padding: 2px; border-radius: 2px; font-weight: bold;"), profile$lhp_raw_power),
-              div(style = paste0("background: ", grade_color(profile$lhp_power), "; text-align: center; padding: 2px; border-radius: 2px; font-weight: bold;"), profile$lhp_power),
-              div(style = paste0("background: ", grade_color(profile$lhp_contact), "; text-align: center; padding: 2px; border-radius: 2px; font-weight: bold;"), profile$lhp_contact),
-              div(style = paste0("background: ", grade_color(profile$lhp_avoid_k), "; text-align: center; padding: 2px; border-radius: 2px; font-weight: bold;"), profile$lhp_avoid_k),
-              div(style = paste0("background: ", grade_color(profile$lhp_swing_dec), "; text-align: center; padding: 2px; border-radius: 2px; font-weight: bold;"), profile$lhp_swing_dec)
+              style = "display: grid; grid-template-columns: 22px repeat(5, 1fr); gap: 1px; font-size: 6px; margin-bottom: 3px;",
+              div(), div(style = "text-align: center;", "Raw"), div(style = "text-align: center;", "Gm"), 
+              div(style = "text-align: center;", "Con"), div(style = "text-align: center;", "AvK"), div(style = "text-align: center;", "Dec"),
+              div(style = "font-weight: bold;", "R"),
+              div(style = paste0("background: ", grade_color(profile$rhp_raw_power), "; text-align: center; padding: 1px; border-radius: 2px; font-weight: bold;"), profile$rhp_raw_power),
+              div(style = paste0("background: ", grade_color(profile$rhp_power), "; text-align: center; padding: 1px; border-radius: 2px; font-weight: bold;"), profile$rhp_power),
+              div(style = paste0("background: ", grade_color(profile$rhp_contact), "; text-align: center; padding: 1px; border-radius: 2px; font-weight: bold;"), profile$rhp_contact),
+              div(style = paste0("background: ", grade_color(profile$rhp_avoid_k), "; text-align: center; padding: 1px; border-radius: 2px; font-weight: bold;"), profile$rhp_avoid_k),
+              div(style = paste0("background: ", grade_color(profile$rhp_swing_dec), "; text-align: center; padding: 1px; border-radius: 2px; font-weight: bold;"), profile$rhp_swing_dec),
+              div(style = "font-weight: bold;", "L"),
+              div(style = paste0("background: ", grade_color(profile$lhp_raw_power), "; text-align: center; padding: 1px; border-radius: 2px; font-weight: bold;"), profile$lhp_raw_power),
+              div(style = paste0("background: ", grade_color(profile$lhp_power), "; text-align: center; padding: 1px; border-radius: 2px; font-weight: bold;"), profile$lhp_power),
+              div(style = paste0("background: ", grade_color(profile$lhp_contact), "; text-align: center; padding: 1px; border-radius: 2px; font-weight: bold;"), profile$lhp_contact),
+              div(style = paste0("background: ", grade_color(profile$lhp_avoid_k), "; text-align: center; padding: 1px; border-radius: 2px; font-weight: bold;"), profile$lhp_avoid_k),
+              div(style = paste0("background: ", grade_color(profile$lhp_swing_dec), "; text-align: center; padding: 1px; border-radius: 2px; font-weight: bold;"), profile$lhp_swing_dec)
             ),
-            # Spray Charts - 2x2 grid
-            div(style = "font-size: 8px; font-weight: bold; text-align: center; margin-bottom: 2px;", "Spray Charts"),
+            # Spray Charts - 2x2 compact
             div(
-              style = "display: grid; grid-template-columns: 1fr 1fr; gap: 2px;",
+              style = "display: grid; grid-template-columns: 1fr 1fr; gap: 1px;",
               div(style = "text-align: center;",
-                  div(style = "font-size: 7px; color: #666;", "vs RHP"),
-                  plotOutput(paste0("spray_rhp_", safe_name), height = "60px")),
+                  div(style = "font-size: 6px; color: #666;", "vR"),
+                  plotOutput(paste0("spray_rhp_", safe_name), height = "50px")),
               div(style = "text-align: center;",
-                  div(style = "font-size: 7px; color: #666;", "vs LHP"),
-                  plotOutput(paste0("spray_lhp_", safe_name), height = "60px")),
+                  div(style = "font-size: 6px; color: #666;", "vL"),
+                  plotOutput(paste0("spray_lhp_", safe_name), height = "50px")),
               div(style = "text-align: center;",
-                  div(style = "font-size: 7px; color: #666;", "0-1 K"),
-                  plotOutput(paste0("spray_01k_", safe_name), height = "60px")),
+                  div(style = "font-size: 6px; color: #666;", "0-1K"),
+                  plotOutput(paste0("spray_01k_", safe_name), height = "50px")),
               div(style = "text-align: center;",
-                  div(style = "font-size: 7px; color: #666;", "2 K"),
-                  plotOutput(paste0("spray_2k_", safe_name), height = "60px"))
+                  div(style = "font-size: 6px; color: #666;", "2K"),
+                  plotOutput(paste0("spray_2k_", safe_name), height = "50px"))
             ),
-            # Pitch Family Stats
-            div(style = "font-size: 7px; margin-top: 4px; border-top: 1px solid #ddd; padding-top: 3px;",
-                div(style = "font-weight: bold; text-align: center; margin-bottom: 2px;", "vs Pitch Type (SLG | Whiff%)"),
-                div(style = "display: grid; grid-template-columns: 25px 1fr 1fr; gap: 1px; font-size: 6px;",
+            # Pitch Family Stats - compact
+            div(style = "font-size: 6px; margin-top: 2px; border-top: 1px solid #ddd; padding-top: 2px;",
+                div(style = "display: grid; grid-template-columns: 18px 1fr 1fr; gap: 1px; font-size: 6px;",
                     div(style = "color: #FA8072; font-weight: bold;", "FB"),
                     div(style = "text-align: center;", {
                       fb_rhp <- profile$splits[["RHP_FB"]]$stats
                       slg <- if (!is.null(fb_rhp$SLG) && !is.na(fb_rhp$SLG)) sprintf(".%03d", round(fb_rhp$SLG * 1000)) else "-"
-                      whiff <- if (!is.null(fb_rhp$Whiff_pct) && !is.na(fb_rhp$Whiff_pct)) sprintf("%.0f%%", fb_rhp$Whiff_pct) else "-"
-                      paste0("R: ", slg, "|", whiff)
+                      whiff <- if (!is.null(fb_rhp$Whiff_pct) && !is.na(fb_rhp$Whiff_pct)) sprintf("%.0f", fb_rhp$Whiff_pct) else "-"
+                      paste0("R:", slg, "/", whiff)
                     }),
                     div(style = "text-align: center;", {
                       fb_lhp <- profile$splits[["LHP_FB"]]$stats
                       slg <- if (!is.null(fb_lhp$SLG) && !is.na(fb_lhp$SLG)) sprintf(".%03d", round(fb_lhp$SLG * 1000)) else "-"
-                      whiff <- if (!is.null(fb_lhp$Whiff_pct) && !is.na(fb_lhp$Whiff_pct)) sprintf("%.0f%%", fb_lhp$Whiff_pct) else "-"
-                      paste0("L: ", slg, "|", whiff)
+                      whiff <- if (!is.null(fb_lhp$Whiff_pct) && !is.na(fb_lhp$Whiff_pct)) sprintf("%.0f", fb_lhp$Whiff_pct) else "-"
+                      paste0("L:", slg, "/", whiff)
                     }),
                     div(style = "color: #A020F0; font-weight: bold;", "BB"),
                     div(style = "text-align: center;", {
                       bb_rhp <- profile$splits[["RHP_BB"]]$stats
                       slg <- if (!is.null(bb_rhp$SLG) && !is.na(bb_rhp$SLG)) sprintf(".%03d", round(bb_rhp$SLG * 1000)) else "-"
-                      whiff <- if (!is.null(bb_rhp$Whiff_pct) && !is.na(bb_rhp$Whiff_pct)) sprintf("%.0f%%", bb_rhp$Whiff_pct) else "-"
-                      paste0("R: ", slg, "|", whiff)
+                      whiff <- if (!is.null(bb_rhp$Whiff_pct) && !is.na(bb_rhp$Whiff_pct)) sprintf("%.0f", bb_rhp$Whiff_pct) else "-"
+                      paste0("R:", slg, "/", whiff)
                     }),
                     div(style = "text-align: center;", {
                       bb_lhp <- profile$splits[["LHP_BB"]]$stats
                       slg <- if (!is.null(bb_lhp$SLG) && !is.na(bb_lhp$SLG)) sprintf(".%03d", round(bb_lhp$SLG * 1000)) else "-"
-                      whiff <- if (!is.null(bb_lhp$Whiff_pct) && !is.na(bb_lhp$Whiff_pct)) sprintf("%.0f%%", bb_lhp$Whiff_pct) else "-"
-                      paste0("L: ", slg, "|", whiff)
+                      whiff <- if (!is.null(bb_lhp$Whiff_pct) && !is.na(bb_lhp$Whiff_pct)) sprintf("%.0f", bb_lhp$Whiff_pct) else "-"
+                      paste0("L:", slg, "/", whiff)
                     }),
                     div(style = "color: #2E8B57; font-weight: bold;", "OS"),
                     div(style = "text-align: center;", {
                       os_rhp <- profile$splits[["RHP_OS"]]$stats
                       slg <- if (!is.null(os_rhp$SLG) && !is.na(os_rhp$SLG)) sprintf(".%03d", round(os_rhp$SLG * 1000)) else "-"
-                      whiff <- if (!is.null(os_rhp$Whiff_pct) && !is.na(os_rhp$Whiff_pct)) sprintf("%.0f%%", os_rhp$Whiff_pct) else "-"
-                      paste0("R: ", slg, "|", whiff)
+                      whiff <- if (!is.null(os_rhp$Whiff_pct) && !is.na(os_rhp$Whiff_pct)) sprintf("%.0f", os_rhp$Whiff_pct) else "-"
+                      paste0("R:", slg, "/", whiff)
                     }),
                     div(style = "text-align: center;", {
                       os_lhp <- profile$splits[["LHP_OS"]]$stats
                       slg <- if (!is.null(os_lhp$SLG) && !is.na(os_lhp$SLG)) sprintf(".%03d", round(os_lhp$SLG * 1000)) else "-"
-                      whiff <- if (!is.null(os_lhp$Whiff_pct) && !is.na(os_lhp$Whiff_pct)) sprintf("%.0f%%", os_lhp$Whiff_pct) else "-"
-                      paste0("L: ", slg, "|", whiff)
+                      whiff <- if (!is.null(os_lhp$Whiff_pct) && !is.na(os_lhp$Whiff_pct)) sprintf("%.0f", os_lhp$Whiff_pct) else "-"
+                      paste0("L:", slg, "/", whiff)
                     })
                 )
             )
           ),
           
-          # COL 2: vs RHP - Condensed layout
+          # COL 2: vs RHP - Ultra-compact single row layout
           div(
-            style = "background: white; padding: 4px; border-radius: 4px;",
+            style = "background: white; padding: 3px; border-radius: 4px;",
             div(style = "font-weight: bold; font-size: 9px; text-align: center; margin-bottom: 2px; background: #fff3e0; padding: 2px; border-radius: 3px;", "vs RHP"),
             
-            # Heatmaps - 2x2 grid: Fastball vs Breaking, Power vs Swing Decisions
+            # ALL CHARTS IN ONE ROW: Heatmaps | Hit/Out | Movement
             div(
-              style = "display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px; margin-bottom: 3px;",
+              style = "display: grid; grid-template-columns: 2fr 2fr 3fr; gap: 3px;",
+              
+              # Heatmaps Section (FB + BB side by side, Power/Swing stacked)
               div(
-                div(style = "font-size: 6px; font-weight: bold; text-align: center; color: #FA8072;", "Fastball (SI,FC)"),
-                div(style = "font-size: 5px; text-align: center; color: #1A9850;", "Power"),
-                plotOutput(paste0("hm_rhp_power_fb_", safe_name), height = "48px"),
-                div(style = "font-size: 5px; text-align: center; color: #e65100;", "Swing Dec"),
-                plotOutput(paste0("hm_rhp_swing_fb_", safe_name), height = "48px")
-              ),
-              div(
-                div(style = "font-size: 6px; font-weight: bold; text-align: center; color: #A020F0;", "Breaking (SL,CU)"),
-                div(style = "font-size: 5px; text-align: center; color: #1A9850;", "Power"),
-                plotOutput(paste0("hm_rhp_power_bb_", safe_name), height = "48px"),
-                div(style = "font-size: 5px; text-align: center; color: #e65100;", "Swing Dec"),
-                plotOutput(paste0("hm_rhp_swing_bb_", safe_name), height = "48px")
-              )
-            ),
-            
-            # Combined row: Hit/Out (2x2) + Movement (3 across)
-            div(
-              style = "display: grid; grid-template-columns: 2fr 3fr; gap: 4px; border-top: 1px solid #eee; padding-top: 2px;",
-              # Hit/Out 2x2
-              div(
-                div(style = "font-size: 6px; font-weight: bold; color: #006F71; margin-bottom: 1px;", "Hit/Out Locations"),
                 div(style = "display: grid; grid-template-columns: 1fr 1fr; gap: 2px;",
-                    div(plotOutput(paste0("hitout_rhp_hits_", safe_name), height = "50px")),
-                    div(plotOutput(paste0("hitout_rhp_outs_", safe_name), height = "50px")),
-                    div(plotOutput(paste0("hitout_rhp_2k_hits_", safe_name), height = "50px")),
-                    div(plotOutput(paste0("hitout_rhp_2k_outs_", safe_name), height = "50px"))
+                    div(
+                      div(style = "font-size: 6px; font-weight: bold; text-align: center; color: #FA8072;", "FB"),
+                      div(style = "font-size: 5px; text-align: center; color: #1A9850;", "Pwr"),
+                      plotOutput(paste0("hm_rhp_power_fb_", safe_name), height = "52px"),
+                      div(style = "font-size: 5px; text-align: center; color: #e65100;", "SwD"),
+                      plotOutput(paste0("hm_rhp_swing_fb_", safe_name), height = "52px")
+                    ),
+                    div(
+                      div(style = "font-size: 6px; font-weight: bold; text-align: center; color: #A020F0;", "BB"),
+                      div(style = "font-size: 5px; text-align: center; color: #1A9850;", "Pwr"),
+                      plotOutput(paste0("hm_rhp_power_bb_", safe_name), height = "52px"),
+                      div(style = "font-size: 5px; text-align: center; color: #e65100;", "SwD"),
+                      plotOutput(paste0("hm_rhp_swing_bb_", safe_name), height = "52px")
+                    )
                 )
               ),
+              
+              # Hit/Out 2x2
+              div(
+                div(style = "font-size: 6px; font-weight: bold; color: #006F71; text-align: center; margin-bottom: 1px;", "Hit/Out"),
+                div(style = "display: grid; grid-template-columns: 1fr 1fr; gap: 2px;",
+                    div(style = "text-align: center;",
+                        div(style = "font-size: 5px; color: #1A9850;", "Hits"),
+                        plotOutput(paste0("hitout_rhp_hits_", safe_name), height = "55px")),
+                    div(style = "text-align: center;",
+                        div(style = "font-size: 5px; color: #D73027;", "Outs"),
+                        plotOutput(paste0("hitout_rhp_outs_", safe_name), height = "55px")),
+                    div(style = "text-align: center;",
+                        div(style = "font-size: 5px; color: #1A9850;", "2K H"),
+                        plotOutput(paste0("hitout_rhp_2k_hits_", safe_name), height = "55px")),
+                    div(style = "text-align: center;",
+                        div(style = "font-size: 5px; color: #D73027;", "2K O"),
+                        plotOutput(paste0("hitout_rhp_2k_outs_", safe_name), height = "55px"))
+                )
+              ),
+              
               # Movement 3 across
               div(
-                div(style = "font-size: 6px; font-weight: bold; color: #666; margin-bottom: 1px;", "Movement (red=whiff, grn=95EV)"),
+                div(style = "font-size: 6px; font-weight: bold; color: #666; text-align: center; margin-bottom: 1px;", "Movement"),
                 div(style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px;",
                     div(style = "text-align: center;",
                         div(style = "font-size: 5px; color: #FA8072; font-weight: bold;", "FB"),
-                        plotOutput(paste0("mvmt_rhp_fb_", safe_name), height = "55px")),
+                        plotOutput(paste0("mvmt_rhp_fb_", safe_name), height = "115px")),
                     div(style = "text-align: center;",
                         div(style = "font-size: 5px; color: #A020F0; font-weight: bold;", "BB"),
-                        plotOutput(paste0("mvmt_rhp_bb_", safe_name), height = "55px")),
+                        plotOutput(paste0("mvmt_rhp_bb_", safe_name), height = "115px")),
                     div(style = "text-align: center;",
                         div(style = "font-size: 5px; color: #2E8B57; font-weight: bold;", "OS"),
-                        plotOutput(paste0("mvmt_rhp_os_", safe_name), height = "55px"))
+                        plotOutput(paste0("mvmt_rhp_os_", safe_name), height = "115px"))
                 )
               )
             ),
             
-            # Velo Splits
-            div(style = "font-size: 6px; font-weight: bold; margin-top: 2px; color: #e65100;", "Velo RV/100"),
-            uiOutput(paste0("velo_splits_rhp_", safe_name))
+            # Velo Splits - inline
+            div(style = "font-size: 6px; font-weight: bold; margin-top: 2px; color: #e65100; display: flex; align-items: center; gap: 4px;",
+                span("Velo:"), uiOutput(paste0("velo_splits_rhp_", safe_name), inline = TRUE))
           ),
           
-          # COL 3: vs LHP - Condensed layout
+          # COL 3: vs LHP - Ultra-compact single row layout
           div(
-            style = "background: white; padding: 4px; border-radius: 4px;",
+            style = "background: white; padding: 3px; border-radius: 4px;",
             div(style = "font-weight: bold; font-size: 9px; text-align: center; margin-bottom: 2px; background: #e8f5e9; padding: 2px; border-radius: 3px;", "vs LHP"),
             
-            # Heatmaps - 2x2 grid: Fastball vs Breaking, Power vs Swing Decisions
+            # ALL CHARTS IN ONE ROW: Heatmaps | Hit/Out | Movement
             div(
-              style = "display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px; margin-bottom: 3px;",
+              style = "display: grid; grid-template-columns: 2fr 2fr 3fr; gap: 3px;",
+              
+              # Heatmaps Section (FB + BB side by side, Power/Swing stacked)
               div(
-                div(style = "font-size: 6px; font-weight: bold; text-align: center; color: #FA8072;", "Fastball (SI,FC)"),
-                div(style = "font-size: 5px; text-align: center; color: #1A9850;", "Power"),
-                plotOutput(paste0("hm_lhp_power_fb_", safe_name), height = "48px"),
-                div(style = "font-size: 5px; text-align: center; color: #e65100;", "Swing Dec"),
-                plotOutput(paste0("hm_lhp_swing_fb_", safe_name), height = "48px")
-              ),
-              div(
-                div(style = "font-size: 6px; font-weight: bold; text-align: center; color: #A020F0;", "Breaking (SL,CU)"),
-                div(style = "font-size: 5px; text-align: center; color: #1A9850;", "Power"),
-                plotOutput(paste0("hm_lhp_power_bb_", safe_name), height = "48px"),
-                div(style = "font-size: 5px; text-align: center; color: #e65100;", "Swing Dec"),
-                plotOutput(paste0("hm_lhp_swing_bb_", safe_name), height = "48px")
-              )
-            ),
-            
-            # Combined row: Hit/Out (2x2) + Movement (3 across)
-            div(
-              style = "display: grid; grid-template-columns: 2fr 3fr; gap: 4px; border-top: 1px solid #eee; padding-top: 2px;",
-              # Hit/Out 2x2
-              div(
-                div(style = "font-size: 6px; font-weight: bold; color: #006F71; margin-bottom: 1px;", "Hit/Out Locations"),
                 div(style = "display: grid; grid-template-columns: 1fr 1fr; gap: 2px;",
-                    div(plotOutput(paste0("hitout_lhp_hits_", safe_name), height = "50px")),
-                    div(plotOutput(paste0("hitout_lhp_outs_", safe_name), height = "50px")),
-                    div(plotOutput(paste0("hitout_lhp_2k_hits_", safe_name), height = "50px")),
-                    div(plotOutput(paste0("hitout_lhp_2k_outs_", safe_name), height = "50px"))
+                    div(
+                      div(style = "font-size: 6px; font-weight: bold; text-align: center; color: #FA8072;", "FB"),
+                      div(style = "font-size: 5px; text-align: center; color: #1A9850;", "Pwr"),
+                      plotOutput(paste0("hm_lhp_power_fb_", safe_name), height = "52px"),
+                      div(style = "font-size: 5px; text-align: center; color: #e65100;", "SwD"),
+                      plotOutput(paste0("hm_lhp_swing_fb_", safe_name), height = "52px")
+                    ),
+                    div(
+                      div(style = "font-size: 6px; font-weight: bold; text-align: center; color: #A020F0;", "BB"),
+                      div(style = "font-size: 5px; text-align: center; color: #1A9850;", "Pwr"),
+                      plotOutput(paste0("hm_lhp_power_bb_", safe_name), height = "52px"),
+                      div(style = "font-size: 5px; text-align: center; color: #e65100;", "SwD"),
+                      plotOutput(paste0("hm_lhp_swing_bb_", safe_name), height = "52px")
+                    )
                 )
               ),
+              
+              # Hit/Out 2x2
+              div(
+                div(style = "font-size: 6px; font-weight: bold; color: #006F71; text-align: center; margin-bottom: 1px;", "Hit/Out"),
+                div(style = "display: grid; grid-template-columns: 1fr 1fr; gap: 2px;",
+                    div(style = "text-align: center;",
+                        div(style = "font-size: 5px; color: #1A9850;", "Hits"),
+                        plotOutput(paste0("hitout_lhp_hits_", safe_name), height = "55px")),
+                    div(style = "text-align: center;",
+                        div(style = "font-size: 5px; color: #D73027;", "Outs"),
+                        plotOutput(paste0("hitout_lhp_outs_", safe_name), height = "55px")),
+                    div(style = "text-align: center;",
+                        div(style = "font-size: 5px; color: #1A9850;", "2K H"),
+                        plotOutput(paste0("hitout_lhp_2k_hits_", safe_name), height = "55px")),
+                    div(style = "text-align: center;",
+                        div(style = "font-size: 5px; color: #D73027;", "2K O"),
+                        plotOutput(paste0("hitout_lhp_2k_outs_", safe_name), height = "55px"))
+                )
+              ),
+              
               # Movement 3 across
               div(
-                div(style = "font-size: 6px; font-weight: bold; color: #666; margin-bottom: 1px;", "Movement (red=whiff, grn=95EV)"),
+                div(style = "font-size: 6px; font-weight: bold; color: #666; text-align: center; margin-bottom: 1px;", "Movement"),
                 div(style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px;",
                     div(style = "text-align: center;",
                         div(style = "font-size: 5px; color: #FA8072; font-weight: bold;", "FB"),
-                        plotOutput(paste0("mvmt_lhp_fb_", safe_name), height = "55px")),
+                        plotOutput(paste0("mvmt_lhp_fb_", safe_name), height = "115px")),
                     div(style = "text-align: center;",
                         div(style = "font-size: 5px; color: #A020F0; font-weight: bold;", "BB"),
-                        plotOutput(paste0("mvmt_lhp_bb_", safe_name), height = "55px")),
+                        plotOutput(paste0("mvmt_lhp_bb_", safe_name), height = "115px")),
                     div(style = "text-align: center;",
                         div(style = "font-size: 5px; color: #2E8B57; font-weight: bold;", "OS"),
-                        plotOutput(paste0("mvmt_lhp_os_", safe_name), height = "55px"))
+                        plotOutput(paste0("mvmt_lhp_os_", safe_name), height = "115px"))
                 )
               )
             ),
             
-            # Velo Splits
-            div(style = "font-size: 6px; font-weight: bold; margin-top: 2px; color: #2e7d32;", "Velo RV/100"),
-            uiOutput(paste0("velo_splits_lhp_", safe_name))
+            # Velo Splits - inline
+            div(style = "font-size: 6px; font-weight: bold; margin-top: 2px; color: #2e7d32; display: flex; align-items: center; gap: 4px;",
+                span("Velo:"), uiOutput(paste0("velo_splits_lhp_", safe_name), inline = TRUE))
           )
         ),
         
-        # ROW 3: Pitch Plan Notes
+        # ROW 3: Pitch Plan Notes - compact
         div(
-          style = "margin-top: 6px; padding-top: 6px; border-top: 2px solid #ddd;",
-          div(style = "font-weight: bold; font-size: 9px; margin-bottom: 4px; color: #006F71;", "Pitch Plan"),
+          style = "margin-top: 4px; padding-top: 4px; border-top: 1px solid #ddd;",
           div(
-            style = "display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;",
+            style = "display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;",
             div(
-              div(style = "font-weight: bold; font-size: 7px; margin-bottom: 1px;", "Overall:"),
+              div(style = "font-weight: bold; font-size: 7px; margin-bottom: 1px; color: #006F71;", "Overall:"),
               tags$textarea(
                 id = paste0("notes_overall_", safe_name),
-                style = "width: 100%; height: 50px; font-size: 8px; border: 1px solid #ddd; border-radius: 3px; padding: 3px; resize: none;",
+                style = "width: 100%; height: 35px; font-size: 8px; border: 1px solid #ddd; border-radius: 3px; padding: 2px; resize: none;",
                 placeholder = "Overall approach..."
               )
             ),
@@ -3789,7 +3807,7 @@ server <- function(input, output, session) {
               div(style = "font-weight: bold; font-size: 7px; margin-bottom: 1px; color: #e65100;", "vs RHP:"),
               tags$textarea(
                 id = paste0("notes_rhp_", safe_name),
-                style = "width: 100%; height: 50px; font-size: 8px; border: 1px solid #ddd; border-radius: 3px; padding: 3px; resize: none;",
+                style = "width: 100%; height: 35px; font-size: 8px; border: 1px solid #ddd; border-radius: 3px; padding: 2px; resize: none;",
                 placeholder = "Pitch plan vs RHP..."
               )
             ),
@@ -3797,7 +3815,7 @@ server <- function(input, output, session) {
               div(style = "font-weight: bold; font-size: 7px; margin-bottom: 1px; color: #2e7d32;", "vs LHP:"),
               tags$textarea(
                 id = paste0("notes_lhp_", safe_name),
-                style = "width: 100%; height: 50px; font-size: 8px; border: 1px solid #ddd; border-radius: 3px; padding: 3px; resize: none;",
+                style = "width: 100%; height: 35px; font-size: 8px; border: 1px solid #ddd; border-radius: 3px; padding: 2px; resize: none;",
                 placeholder = "Pitch plan vs LHP..."
               )
             )
